@@ -9,6 +9,8 @@ set(src_common
     common/common.h
     common/dirs.c
     common/dirs.h
+    common/exec.c
+    common/exec.h
     common/file.c
     common/file.h
     common/script.c

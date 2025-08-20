@@ -130,6 +130,18 @@ void Dir_FromNativeSeparators(char* path)
   #endif
 }
 
+void Dir_ToNativeSeparators(char* path)
+{
+  #ifdef _WIN32
+    for (char* p = path; ; ++p) {
+        if (*p == '/')
+            *p = '\\';
+        else if (*p == 0)
+            break;
+    }
+  #endif
+}
+
 void Dir_AppendPath(char* path, const char* element)
 {
     Dir_EnsureTrailingPathSeparator(path);

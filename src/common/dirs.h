@@ -20,6 +20,7 @@ bool Dir_RemoveLastPath(char* path);
 void Dir_EnsureTrailingPathSeparator(char* path);
 
 void Dir_FromNativeSeparators(char* path);
+void Dir_ToNativeSeparators(char* path);
 
 void Dir_AppendPath(char* path, const char* element);
 

@@ -2,9 +2,13 @@
 #include <common/script.h>
 #include <common/dirs.h>
 #include <common/file.h>
+#include <common/exec.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <malloc.h>
+
+#define DEFAULT_EXECUTABLE_ID "_default_"
 
 /********************************************************************************************************************/
 
@@ -48,7 +52,7 @@ static bool loadPackageConfig(const char* package)
     TARGET_DIR = getGlobal("TARGET_DIR");
     SOURCE_URL = getGlobal("SOURCE_URL");
     CHECK_FILE = getGlobal("CHECK_FILE");
-    DEFAULT_EXECUTABLE = getExecutable("_default_");
+    DEFAULT_EXECUTABLE = getExecutable(DEFAULT_EXECUTABLE_ID);
 
     if (!TARGET_DIR) {
         fprintf(stderr, "error: package '%s' is not available for current environment.\n", package);
@@ -58,15 +62,101 @@ static bool loadPackageConfig(const char* package)
     return true;
 }
 
+static bool ensurePackageInstalled(const char* package)
+{
+    if (!loadPackageConfig(package))
+        return false;
+
+    if (CHECK_FILE) {
+        char file[DIR_MAX];
+        strcpy(file, TARGET_DIR);
+        Dir_AppendPath(file, CHECK_FILE);
+        if (File_Exists(file))
+            return true;
+    }
+    else if (DEFAULT_EXECUTABLE) {
+        const char* exe = getExecutable(DEFAULT_EXECUTABLE);
+        if (!exe) {
+            fprintf(stderr,
+                "error: configuration for package '%s' is corrupt (missing executable '%s').\n",
+                package, DEFAULT_EXECUTABLE);
+            return false;
+        }
+        if (File_Exists(exe))
+            return true;
+    }
+    else {
+        fprintf(stderr, "error: missing CHECK_FILE for package '%s'.\n", package);
+        return false;
+    }
+
+    if (SOURCE_URL) {
+        const char* argv[4];
+        argv[0] = "git";
+        argv[1] = "clone";
+        argv[2] = SOURCE_URL;
+        argv[3] = TARGET_DIR;
+        if (!Exec_Command(argv, 4)) {
+            fprintf(stderr, "error: unable to download package '%s'.\n", package);
+            return false;
+        }
+        return true;
+    }
+
+    fprintf(stderr, "error: missing SOURCE_URL for package '%s'.\n", package);
+    return false;
+}
+
 /********************************************************************************************************************/
 
 bool Pour_Run(const char* package, int argc, char** argv)
 {
-    /* FIXME */
-    (void)package;
-    (void)argc;
-    (void)argv;
-    return false;
+    lua_State* L = gL;
+    int n = lua_gettop(L);
+
+    const char* executable = NULL;
+    const char* colon = strchr(package, ':');
+    if (colon) {
+        size_t len = colon - package;
+        char* buf = (char*)alloca(len + 1);
+        memcpy(buf, package, len);
+        buf[len] = 0;
+        executable = colon + 1;
+        package = buf;
+    }
+
+    if (!ensurePackageInstalled(package)) {
+      error:
+        lua_settop(L, n);
+        return false;
+    }
+
+    const char* exe;
+    if (executable) {
+        exe = getExecutable(executable);
+        if (!exe) {
+            fprintf(stderr, "error: there is no executable '%s' in package '%s'.\n", executable, package);
+            goto error;
+        }
+    } else {
+        if (!DEFAULT_EXECUTABLE) {
+            fprintf(stderr, "error: there is no default executable in package '%s'.\n", package);
+            goto error;
+        }
+        exe = getExecutable(DEFAULT_EXECUTABLE);
+        if (!exe) {
+            fprintf(stderr,
+                "error: configuration for package '%s' is corrupt (missing executable '%s').\n",
+                package, DEFAULT_EXECUTABLE);
+            goto error;
+        }
+    }
+
+    if (!Exec_CommandV(exe, (const char* const*)argv, argc))
+        goto error;
+
+    lua_settop(L, n);
+    return true;
 }
 
 /********************************************************************************************************************/
@@ -76,54 +166,13 @@ bool Pour_Install(const char* package)
     lua_State* L = gL;
     int n = lua_gettop(L);
 
-    if (!loadPackageConfig(package)) {
+    if (!ensurePackageInstalled(package)) {
         lua_settop(L, n);
         return false;
     }
 
-    if (CHECK_FILE) {
-        char file[DIR_MAX];
-        strcpy(file, TARGET_DIR);
-        Dir_AppendPath(file, CHECK_FILE);
-        if (File_Exists(file)) {
-            lua_settop(L, n);
-            return true;
-        }
-    } else if (DEFAULT_EXECUTABLE) {
-        const char* exe = getExecutable(DEFAULT_EXECUTABLE);
-        if (!exe) {
-            fprintf(stderr,
-                "error: configuration for package '%s' is corrupt (missing executable '%s').\n",
-                package, exe);
-            lua_settop(L, n);
-            return false;
-        }
-        if (File_Exists(exe)) {
-            lua_settop(L, n);
-            return true;
-        }
-    } else {
-        fprintf(stderr, "error: missing CHECK_FILE for package '%s'.\n", package);
-        lua_settop(L, n);
-        return false;
-    }
-
-    if (SOURCE_URL) {
-        char command[2048];
-        sprintf(command, "git clone \"%s\" \"%s\"", SOURCE_URL, TARGET_DIR);
-        printf("# %s\n", command);
-        if (system(command) != 0) {
-           fprintf(stderr, "error: unable to download package '%s'.\n", package);
-           lua_settop(L, n);
-           return false;
-        }
-        lua_settop(L, n);
-        return true;
-    }
-
-    fprintf(stderr, "error: missing SOURCE_URL for package '%s'.\n", package);
     lua_settop(L, n);
-    return false;
+    return true;
 }
 
 /********************************************************************************************************************/
