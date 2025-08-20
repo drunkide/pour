@@ -7,7 +7,7 @@ typedef bool (*PFNMainProc)(int argc, char** argv);
 
 extern lua_State* gL;
 
-int Script_DoFile(const char* name);
+bool Script_DoFile(const char* name);
 int Script_RunVM(int argc, char** argv, PFNMainProc pfnMain);
 
 #endif

@@ -8,6 +8,7 @@
 extern const char* const g_rootDir;
 extern const char* const g_toolsDir;
 extern const char* const g_dataDir;
+extern const char* const g_packagesDir;
 
 char* Dir_FindLastSeparator(const char* ptr);
 

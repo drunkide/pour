@@ -4,10 +4,12 @@
 static char g_rootDir_[DIR_MAX];
 static char g_toolsDir_[DIR_MAX];
 static char g_dataDir_[DIR_MAX];
+static char g_packagesDir_[DIR_MAX];
 
 const char* const g_rootDir = g_rootDir_;
 const char* const g_toolsDir = g_toolsDir_;
 const char* const g_dataDir = g_dataDir_;
+const char* const g_packagesDir = g_packagesDir_;
 
 char* Dir_FindLastSeparator(const char* ptr)
 {
@@ -111,8 +113,8 @@ void Dir_EnsureTrailingPathSeparator(char* path)
 {
     size_t len = strlen(path);
     if (len > 0 && !Dir_IsSeparator(path[len - 1])) {
-        path[len - 1] = '/';
-        path[len] = 0;
+        path[len] = '/';
+        path[len + 1] = 0;
     }
 }
 
@@ -148,7 +150,6 @@ void Dirs_Init(void)
     strcpy(g_dataDir_, g_rootDir_);
     Dir_AppendPath(g_dataDir_, "data");
 
-    printf("%s\n", g_rootDir);
-    printf("%s\n", g_toolsDir);
-    printf("%s\n", g_dataDir);
+    strcpy(g_packagesDir_, g_dataDir_);
+    Dir_AppendPath(g_packagesDir_, "packages");
 }

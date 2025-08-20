@@ -1,21 +1,30 @@
 
+set(src_data_packages
+    ../data/packages/cmake-3.31.4.lua
+    ../data/packages/cmake-3.5.2.lua
+    ../data/packages/mingw-4.4.0-32.lua
+    )
+
 set(src_common
     common/common.h
     common/dirs.c
     common/dirs.h
+    common/file.c
+    common/file.h
     common/script.c
     common/script.h
     )
 
 set(src_pour
-    pour/main.c
-    pour/main.h
+    pour/pour.c
+    pour/pour.h
     )
 
 set(src
     _main.c
     )
 
+source_group("Data Files\\packages" FILES ${src_data_packages})
 source_group("Source Files\\common" FILES ${src_common})
 source_group("Source Files\\pour" FILES ${src_pour})
 source_group("Source Files" FILES ${src})
@@ -27,6 +36,7 @@ if(NOT MSVC)
 endif()
 
 add_executable(pour
+    ${src_data_packages}
     ${src_common}
     ${src_pour}
     ${src}

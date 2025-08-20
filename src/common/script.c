@@ -80,13 +80,6 @@ static int docall(lua_State* L, int narg, int nres)
     return status;
 }
 
-static int dochunk(lua_State* L, int status)
-{
-    if (status == LUA_OK)
-        status = docall(L, 0, 0);
-    return report(L, status);
-}
-
 STRUCT(MainParams) {
     PFNMainProc pfnMain;
     char** argv;
@@ -103,7 +96,17 @@ static int pmain(lua_State *L)
     lua_pushboolean(L, 1);  /* signal for libraries to ignore env. vars. */
     lua_setfield(L, LUA_REGISTRYINDEX, "LUA_NOENV");
 
+  #ifdef _WIN32
+    lua_pushboolean(L, 1);
+    lua_setglobal(L, "WINDOWS");
+  #endif
+
     Dirs_Init();
+
+    lua_pushstring(L, g_rootDir); lua_setglobal(L, "ROOT_DIR");
+    lua_pushstring(L, g_toolsDir); lua_setglobal(L, "TOOLS_DIR");
+    lua_pushstring(L, g_dataDir); lua_setglobal(L, "DATA_DIR");
+    lua_pushstring(L, g_packagesDir); lua_setglobal(L, "PACKAGES_DIR");
 
     luaL_openlibs(L);
 
@@ -119,10 +122,15 @@ static int pmain(lua_State *L)
 
 /********************************************************************************************************************/
 
-int Script_DoFile(const char* name)
+bool Script_DoFile(const char* name)
 {
     lua_State* L = gL;
-    return dochunk(L, luaL_loadfile(L, name));
+
+    int status = luaL_loadfile(L, name);
+    if (status == LUA_OK)
+        status = docall(L, 0, 0);
+
+    return report(L, status) == LUA_OK;
 }
 
 int Script_RunVM(int argc, char** argv, PFNMainProc pfnMain)

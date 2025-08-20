@@ -1,4 +1,4 @@
-#include <pour/main.h>
+#include <pour/pour.h>
 #include <common/script.h>
 
 int main(int argc, char** argv)
