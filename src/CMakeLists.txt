@@ -2,7 +2,7 @@
 set(src_data_packages
     ../data/packages/cmake-3.31.4.lua
     ../data/packages/cmake-3.5.2.lua
-    ../data/packages/mingw-4.4.0-32.lua
+    ../data/packages/mingw32-4.4.0.lua
     )
 
 set(src_common
