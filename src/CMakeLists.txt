@@ -50,3 +50,5 @@ if(NOT MSVC)
     set_target_properties(pour PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
 endif()
+
+add_subdirectory(pour_wrapper)
