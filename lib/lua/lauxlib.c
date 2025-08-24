@@ -594,19 +594,21 @@ LUALIB_API void luaL_addstring (luaL_Buffer *B, const char *s) {
 }
 
 
-LUALIB_API void luaL_pushresult (luaL_Buffer *B) {
+LUALIB_API const char* luaL_pushresult (luaL_Buffer *B) {
   lua_State *L = B->L;
+  const char* r;
   checkbufferlevel(B, -1);
-  lua_pushlstring(L, B->b, B->n);
+  r = lua_pushlstring(L, B->b, B->n);
   if (buffonstack(B))
     lua_closeslot(L, -2);  /* close the box */
   lua_remove(L, -2);  /* remove box or placeholder from the stack */
+  return r;
 }
 
 
-LUALIB_API void luaL_pushresultsize (luaL_Buffer *B, size_t sz) {
+LUALIB_API const char* luaL_pushresultsize (luaL_Buffer *B, size_t sz) {
   luaL_addsize(B, sz);
-  luaL_pushresult(B);
+  return luaL_pushresult(B);
 }
 
 

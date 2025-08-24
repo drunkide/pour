@@ -15,6 +15,8 @@ set(src_common
     common/file.h
     common/script.c
     common/script.h
+    common/utf8.c
+    common/utf8.h
     )
 
 set(src_pour

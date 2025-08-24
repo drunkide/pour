@@ -1,9 +1,16 @@
 #include <common/script.h>
 #include <common/dirs.h>
+#include <common/utf8.h>
 #include <lualib.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <signal.h>
+
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <shellapi.h>
+#endif
 
 lua_State* gL;
 
@@ -147,8 +154,24 @@ int Script_RunVM(int argc, char** argv, PFNMainProc pfnMain)
 
     MainParams params;
     params.pfnMain = pfnMain;
+
+  #ifndef _WIN32
     params.argv = argv;
     params.argc = argc;
+  #else
+    LPWSTR* wargv = CommandLineToArgvW(GetCommandLineW(), &params.argc);
+    if (!wargv) {
+        params.argv = argv;
+        params.argc = argc;
+    } else {
+        params.argv = (char**)lua_newuserdata(L, sizeof(char*) * params.argc);
+        for (int i = 0; i < params.argc; i++) {
+            params.argv[i] = (char*)Utf8_PushConvertFromUtf16(L, wargv[i]);
+            luaL_ref(L, LUA_REGISTRYINDEX);
+        }
+        LocalFree(wargv);
+    }
+  #endif
 
     lua_pushcfunction(L, &pmain);
     lua_pushlightuserdata(L, &params);
