@@ -150,9 +150,13 @@ void Dir_AppendPath(char* path, const char* element)
 
 void Dirs_Init(void)
 {
+  #ifdef POUR_ROOT_DIR
+    strcpy(g_rootDir_, POUR_ROOT_DIR);
+  #else
     strcpy(g_rootDir_, __FILE__);
     Dir_RemoveLastPath(g_rootDir_); /* remove file name */
     Dir_RemoveLastPath(g_rootDir_); /* remove 'common' */
+  #endif
     Dir_RemoveLastPath(g_rootDir_); /* remove 'src' */
     Dir_FromNativeSeparators(g_rootDir_);
 

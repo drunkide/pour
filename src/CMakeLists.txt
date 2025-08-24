@@ -5,7 +5,7 @@ set(src_data_packages
     ../data/packages/mingw32-4.4.0.lua
     )
 
-set(src_common
+set(src
     common/common.h
     common/console.c
     common/console.h
@@ -19,23 +19,24 @@ set(src_common
     common/script.h
     common/utf8.c
     common/utf8.h
-    )
-
-set(src_pour
     pour/pour.c
     pour/pour.h
-    )
-
-set(src
     _main.c
     )
 
 source_group("Data Files\\packages" FILES ${src_data_packages})
-source_group("Source Files\\common" FILES ${src_common})
-source_group("Source Files\\pour" FILES ${src_pour})
-source_group("Source Files" FILES ${src})
+
+set(src_all)
+foreach(file ${src})
+    get_filename_component(abs "${file}" ABSOLUTE)
+    list(APPEND src_all "${abs}")
+    get_filename_component(path "${file}" DIRECTORY)
+    string(REPLACE "/" "\\" group "Source Files/${path}")
+    source_group("${group}" FILES "${abs}")
+endforeach()
 
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}")
+add_definitions(-DPOUR_ROOT_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 
 if(NOT MSVC)
     add_definitions(
@@ -47,13 +48,7 @@ if(NOT MSVC)
         )
 endif()
 
-add_executable(pour
-    ${src_data_packages}
-    ${src_common}
-    ${src_pour}
-    ${src}
-    )
-
+add_executable(pour ${src_all})
 target_link_libraries(pour PRIVATE lua)
 
 if(WIN32)
