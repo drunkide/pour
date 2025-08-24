@@ -1,6 +1,14 @@
 #include <pour/pour_lua.h>
 #include <pour/pour.h>
+#include <common/script.h>
 #include <common/file.h>
+#include <common/utf8.h>
+
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <shellapi.h>
+#endif
 
 static int pour_chdir(lua_State* L)
 {
@@ -46,6 +54,28 @@ static int pour_run(lua_State* L)
     return 0;
 }
 
+static int pour_shell_open(lua_State* L)
+{
+    const char* file = luaL_checkstring(L, 1);
+
+  #ifdef _WIN32
+
+    const WCHAR* wfile = (const WCHAR*)Utf8_PushConvertToUtf16(gL, file, NULL);
+    bool result = (INT_PTR)ShellExecuteW(NULL, L"open", wfile, NULL, NULL, 0) > 32;
+    lua_pop(gL, 1);
+
+    if (!result)
+        luaL_error(gL, "unable to open file \"%s\".", file);
+
+  #else
+
+    luaL_error(gL, "shell_open: not implemented on this platform.");
+
+  #endif
+
+    return 0;
+}
+
 /********************************************************************************************************************/
 
 static const luaL_Reg funcs[] = {
@@ -53,6 +83,7 @@ static const luaL_Reg funcs[] = {
     { "file_exists", pour_file_exists },
     { "require", pour_require },
     { "run", pour_run },
+    { "shell_open", pour_shell_open },
     { NULL, NULL }
 };
 

@@ -13,7 +13,9 @@ bool File_Exists(const char* path)
 {
   #ifdef _WIN32
     const WCHAR* wpath = (const WCHAR*)Utf8_PushConvertToUtf16(gL, path, NULL);
-    return GetFileAttributesW(wpath) != INVALID_FILE_ATTRIBUTES;
+    bool result = GetFileAttributesW(wpath) != INVALID_FILE_ATTRIBUTES;
+    lua_pop(gL, 1);
+    return result;
   #else
     struct stat st;
     return stat(path, &st) == 0;
@@ -24,7 +26,9 @@ bool File_CreateDirectory(const char* path)
 {
   #ifdef _WIN32
     const WCHAR* wpath = (const WCHAR*)Utf8_PushConvertToUtf16(gL, path, NULL);
-    return CreateDirectoryW(wpath, NULL);
+    bool result = CreateDirectoryW(wpath, NULL);
+    lua_pop(gL, 1);
+    return result;
   #else
     return mkdir(path) == 0;
   #endif
@@ -34,7 +38,9 @@ bool File_SetCurrentDirectory(const char* path)
 {
   #ifdef _WIN32
     const WCHAR* wpath = (const WCHAR*)Utf8_PushConvertToUtf16(gL, path, NULL);
-    return SetCurrentDirectoryW(wpath);
+    bool result = SetCurrentDirectoryW(wpath);
+    lua_pop(gL, 1);
+    return result;
   #else
     return setcwd(path) == 0;
   #endif
