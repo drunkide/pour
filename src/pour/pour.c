@@ -15,37 +15,40 @@
 
 /********************************************************************************************************************/
 
-static const char* TARGET_DIR;
-static const char* SOURCE_URL;
-static const char* CHECK_FILE;
-static const char* DEFAULT_EXECUTABLE;
+STRUCT(Package) {
+    int globalsTable;
+    const char* TARGET_DIR;
+    const char* SOURCE_URL;
+    const char* CHECK_FILE;
+    const char* DEFAULT_EXECUTABLE;
+};
 
-static void getGlobal(int table, const char* name)
+static void getGlobal(Package* pkg, const char* name)
 {
     lua_State* L = gL;
-    lua_pushvalue(L, table);
+    lua_pushvalue(L, pkg->globalsTable);
     lua_getfield(L, -1, name);
     lua_remove(L, -2);
 }
 
-static const char* getString(int table, const char* name)
+static const char* getString(Package* pkg, const char* name)
 {
     lua_State* L = gL;
-    getGlobal(table, name);
+    getGlobal(pkg, name);
     return (!lua_isnoneornil(L, -1) ? lua_tostring(L, -1) : NULL);
 }
 
-static const char* getExecutable(int table, const char* name)
+static const char* getExecutable(Package* pkg, const char* name)
 {
     lua_State* L = gL;
-    getGlobal(table, "EXECUTABLE");
+    getGlobal(pkg, "EXECUTABLE");
     if (lua_isnoneornil(L, -1))
         return NULL;
     lua_getfield(L, -1, name);
     return (!lua_isnoneornil(L, -1) ? lua_tostring(L, -1) : NULL);
 }
 
-static bool loadPackageConfig(int globals, const char* package)
+static bool loadPackageConfig(Package* pkg, const char* package)
 {
     lua_State* L = gL;
     char script[DIR_MAX];
@@ -58,20 +61,20 @@ static bool loadPackageConfig(int globals, const char* package)
         return false;
     }
 
-    if (!Script_DoFile(script, globals))
+    if (!Script_DoFile(script, pkg->globalsTable))
         return false;
 
-    TARGET_DIR = getString(globals, "TARGET_DIR");
-    SOURCE_URL = getString(globals, "SOURCE_URL");
-    CHECK_FILE = getString(globals, "CHECK_FILE");
-    DEFAULT_EXECUTABLE = getExecutable(globals, DEFAULT_EXECUTABLE_ID);
+    pkg->TARGET_DIR = getString(pkg, "TARGET_DIR");
+    pkg->SOURCE_URL = getString(pkg, "SOURCE_URL");
+    pkg->CHECK_FILE = getString(pkg, "CHECK_FILE");
+    pkg->DEFAULT_EXECUTABLE = getExecutable(pkg, DEFAULT_EXECUTABLE_ID);
 
-    if (!TARGET_DIR) {
+    if (!pkg->TARGET_DIR) {
         Con_PrintF(COLOR_ERROR, "ERROR: package '%s' is not available for current environment.\n", package);
         return false;
     }
 
-    getGlobal(globals, "EXTRA_PATH");
+    getGlobal(pkg, "EXTRA_PATH");
     if (lua_isnoneornil(L, -1))
         lua_pop(L, 1);
     else {
@@ -98,15 +101,15 @@ static bool loadPackageConfig(int globals, const char* package)
     return true;
 }
 
-static bool ensurePackageConfigured(int globals, const char* package)
+static bool ensurePackageConfigured(Package* pkg, const char* package)
 {
     lua_State* L = gL;
 
-    const char* POST_FETCH = getString(globals, "POST_FETCH");
+    const char* POST_FETCH = getString(pkg, "POST_FETCH");
     if (!POST_FETCH)
         return true;
 
-    lua_pushfstring(L, "%s/.pour-configured", TARGET_DIR);
+    lua_pushfstring(L, "%s/.pour-configured", pkg->TARGET_DIR);
     const char* checkFile = lua_tostring(L, -1);
     if (File_Exists(checkFile))
         return true;
@@ -122,40 +125,40 @@ static bool ensurePackageConfigured(int globals, const char* package)
     return true;
 }
 
-static bool ensurePackageInstalled(int globals, const char* package)
+static bool ensurePackageInstalled(Package* pkg, const char* package)
 {
-    if (!loadPackageConfig(globals, package))
+    if (!loadPackageConfig(pkg, package))
         return false;
 
-    if (CHECK_FILE) {
-        if (File_Exists(CHECK_FILE))
-            return ensurePackageConfigured(globals, package);
-    } else if (DEFAULT_EXECUTABLE) {
-        const char* exe = getExecutable(globals, DEFAULT_EXECUTABLE);
+    if (pkg->CHECK_FILE) {
+        if (File_Exists(pkg->CHECK_FILE))
+            return ensurePackageConfigured(pkg, package);
+    } else if (pkg->DEFAULT_EXECUTABLE) {
+        const char* exe = getExecutable(pkg, pkg->DEFAULT_EXECUTABLE);
         if (!exe) {
             Con_PrintF(COLOR_ERROR,
                 "ERROR: configuration for package '%s' is corrupt (missing executable '%s').\n",
-                package, DEFAULT_EXECUTABLE);
+                package, pkg->DEFAULT_EXECUTABLE);
             return false;
         }
         if (File_Exists(exe))
-            return ensurePackageConfigured(globals, package);
+            return ensurePackageConfigured(pkg, package);
     } else {
         Con_PrintF(COLOR_ERROR, "ERROR: missing CHECK_FILE for package '%s'.\n", package);
         return false;
     }
 
-    if (SOURCE_URL) {
+    if (pkg->SOURCE_URL) {
         const char* argv[4];
         argv[0] = "git";
         argv[1] = "clone";
-        argv[2] = SOURCE_URL;
-        argv[3] = TARGET_DIR;
+        argv[2] = pkg->SOURCE_URL;
+        argv[3] = pkg->TARGET_DIR;
         if (!Exec_Command(argv, 4)) {
             Con_PrintF(COLOR_ERROR, "ERROR: unable to download package '%s'.\n", package);
             return false;
         }
-        return ensurePackageConfigured(globals, package);
+        return ensurePackageConfigured(pkg, package);
     }
 
     Con_PrintF(COLOR_ERROR, "ERROR: missing SOURCE_URL for package '%s'.\n", package);
@@ -168,9 +171,12 @@ bool Pour_Run(const char* package, int argc, char** argv)
 {
     lua_State* L = gL;
     int n = lua_gettop(L);
+    Package pkg;
+
+    luaL_checkstack(L, 100, NULL);
 
     lua_newtable(L);
-    int globals = lua_gettop(L);
+    pkg.globalsTable = lua_gettop(L);
 
     const char* executable = NULL;
     const char* colon = strchr(package, ':');
@@ -183,7 +189,7 @@ bool Pour_Run(const char* package, int argc, char** argv)
         package = buf;
     }
 
-    if (!ensurePackageInstalled(globals, package)) {
+    if (!ensurePackageInstalled(&pkg, package)) {
       error:
         lua_settop(L, n);
         return false;
@@ -191,21 +197,21 @@ bool Pour_Run(const char* package, int argc, char** argv)
 
     const char* exe;
     if (executable) {
-        exe = getExecutable(globals, executable);
+        exe = getExecutable(&pkg, executable);
         if (!exe) {
             Con_PrintF(COLOR_ERROR, "ERROR: there is no executable '%s' in package '%s'.\n", executable, package);
             goto error;
         }
     } else {
-        if (!DEFAULT_EXECUTABLE) {
+        if (!pkg.DEFAULT_EXECUTABLE) {
             Con_PrintF(COLOR_ERROR, "ERROR: there is no default executable in package '%s'.\n", package);
             goto error;
         }
-        exe = getExecutable(globals, DEFAULT_EXECUTABLE);
+        exe = getExecutable(&pkg, pkg.DEFAULT_EXECUTABLE);
         if (!exe) {
             Con_PrintF(COLOR_ERROR,
                 "ERROR: configuration for package '%s' is corrupt (missing executable '%s').\n",
-                package, DEFAULT_EXECUTABLE);
+                package, pkg.DEFAULT_EXECUTABLE);
             goto error;
         }
     }
@@ -242,11 +248,12 @@ bool Pour_Install(const char* package)
 {
     lua_State* L = gL;
     int n = lua_gettop(L);
+    Package pkg;
 
     lua_newtable(L);
-    int globals = lua_gettop(L);
+    pkg.globalsTable = lua_gettop(L);
 
-    if (!ensurePackageInstalled(globals, package)) {
+    if (!ensurePackageInstalled(&pkg, package)) {
         lua_settop(L, n);
         return false;
     }
@@ -257,8 +264,8 @@ bool Pour_Install(const char* package)
 
 /********************************************************************************************************************/
 
-STRUCT(Package) {
-    Package* next;
+STRUCT(PackageName) {
+    PackageName* next;
     const char* name;
 };
 
@@ -280,12 +287,12 @@ bool Pour_Main(int argc, char** argv)
         return Pour_ExecScript(argv[2], argc - 2, argv + 2);
     }
 
-    Package* firstPackage = NULL;
-    Package* lastPackage = NULL;
+    PackageName* firstPackage = NULL;
+    PackageName* lastPackage = NULL;
 
     for (int i = 1; i < argc; i++) {
         if (argv[i][0] != '-') {
-            Package* p = (Package*)lua_newuserdata(gL, sizeof(Package));
+            PackageName* p = (PackageName*)lua_newuserdata(gL, sizeof(PackageName));
             p->next = NULL;
             p->name = argv[i];
             if (!firstPackage)
@@ -311,7 +318,7 @@ bool Pour_Main(int argc, char** argv)
         return false;
     }
 
-    for (Package* p = firstPackage; p; p = p->next) {
+    for (PackageName* p = firstPackage; p; p = p->next) {
         if (!Pour_Install(p->name))
             return false;
     }
