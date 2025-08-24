@@ -21,6 +21,7 @@ STRUCT(Package) {
     const char* SOURCE_URL;
     const char* CHECK_FILE;
     const char* DEFAULT_EXECUTABLE;
+    bool ADJUST_ARG;
 };
 
 static void getGlobal(Package* pkg, const char* name)
@@ -29,6 +30,15 @@ static void getGlobal(Package* pkg, const char* name)
     lua_pushvalue(L, pkg->globalsTable);
     lua_getfield(L, -1, name);
     lua_remove(L, -2);
+}
+
+static bool getBoolean(Package* pkg, const char* name)
+{
+    lua_State* L = gL;
+    getGlobal(pkg, name);
+    bool value = lua_isboolean(L, -1) && lua_toboolean(L, -1);
+    lua_pop(L, 1);
+    return value;
 }
 
 static const char* getString(Package* pkg, const char* name)
@@ -68,6 +78,7 @@ static bool loadPackageConfig(Package* pkg, const char* package)
     pkg->SOURCE_URL = getString(pkg, "SOURCE_URL");
     pkg->CHECK_FILE = getString(pkg, "CHECK_FILE");
     pkg->DEFAULT_EXECUTABLE = getExecutable(pkg, DEFAULT_EXECUTABLE_ID);
+    pkg->ADJUST_ARG = getBoolean(pkg, "ADJUST_ARG");
 
     if (!pkg->TARGET_DIR) {
         Con_PrintF(COLOR_ERROR, "ERROR: package '%s' is not available for current environment.\n", package);
@@ -167,6 +178,22 @@ static bool ensurePackageInstalled(Package* pkg, const char* package)
 
 /********************************************************************************************************************/
 
+static void adjustPath(char* dst)
+{
+    if ((dst[0] >= 'A' && dst[0] <= 'Z') && dst[1] == ':')
+        dst[0] += ('a' - 'A');
+
+    if ((dst[0] >= 'a' && dst[0] <= 'z') && dst[1] == ':') {
+        dst[1] = dst[0];
+        dst[0] = '/';
+
+        for (char* p = dst; *p; ++p) {
+            if (*p == '\\')
+                *p = '/';
+        }
+    }
+}
+
 bool Pour_Run(const char* package, int argc, char** argv)
 {
     lua_State* L = gL;
@@ -213,6 +240,19 @@ bool Pour_Run(const char* package, int argc, char** argv)
                 "ERROR: configuration for package '%s' is corrupt (missing executable '%s').\n",
                 package, pkg.DEFAULT_EXECUTABLE);
             goto error;
+        }
+    }
+
+    if (pkg.ADJUST_ARG) {
+        for (int i = 1; i < argc; i++) {
+            if (argv[i][0] != '-')
+                adjustPath(argv[i]);
+            else {
+                if (argv[i][1] == 'I')
+                    adjustPath(argv[i] + 2);
+                else if (argv[i][1] == 'L')
+                    adjustPath(argv[i] + 2);
+            }
         }
     }
 
