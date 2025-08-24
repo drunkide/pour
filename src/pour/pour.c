@@ -246,6 +246,7 @@ bool Pour_Run(const char* package, int argc, char** argv)
                 strcpy(path, argv[i]);
                 Dir_MakeAbsolutePath(path);
                 adjustPath(path);
+                argv[i] = path;
             } else {
                 if (argv[i][1] == 'I')
                     adjustPath(argv[i] + 2);
