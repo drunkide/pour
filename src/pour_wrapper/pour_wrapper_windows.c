@@ -174,7 +174,7 @@ static void exec(const TCHAR* app, TCHAR* cmdline)
 
     if (dwExitCode != 0) {
         if (!app && !ctrl_c)
-            con_printfA(COLOR_ERROR, "ERROR: command exited with code %u", dwExitCode);
+            con_printfA(COLOR_ERROR, "ERROR: command exited with code %u.\n", dwExitCode);
         ExitProcess(1);
     }
 }
