@@ -151,7 +151,7 @@ bool Script_DoFile(const char* name)
 {
     lua_State* L = gL;
 
-    int status = luaL_loadfile(L, name);
+    int status = luaL_loadfile(L, name); /* FIXME: utf-8 */
     if (status == LUA_OK)
         status = docall(L, 0, 0);
 
