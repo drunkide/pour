@@ -19,6 +19,8 @@ void Dir_RemoveTrailingPathSeparator(char* path);
 bool Dir_RemoveLastPath(char* path);
 void Dir_EnsureTrailingPathSeparator(char* path);
 
+void Dir_MakeAbsolutePath(char* path);
+
 void Dir_FromNativeSeparators(char* path);
 void Dir_ToNativeSeparators(char* path);
 

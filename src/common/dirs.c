@@ -1,5 +1,12 @@
 #include <common/dirs.h>
+#include <common/script.h>
+#include <common/utf8.h>
 #include <string.h>
+
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
 
 static char g_rootDir_[DIR_MAX];
 static char g_toolsDir_[DIR_MAX];
@@ -116,6 +123,42 @@ void Dir_EnsureTrailingPathSeparator(char* path)
         path[len] = '/';
         path[len + 1] = 0;
     }
+}
+
+void Dir_MakeAbsolutePath(char* path)
+{
+    lua_State* L = gL;
+
+    if (Dir_IsAbsolutePath(path))
+        return;
+
+  #ifdef _WIN32
+
+    WCHAR cwd[MAX_PATH];
+    cwd[0] = 0;
+    GetCurrentDirectoryW(MAX_PATH, cwd);
+
+    Utf8_PushConvertFromUtf16(L, cwd);
+    lua_pushliteral(L, "\\");
+
+  #else
+
+    char cwd[PATH_MAX] = {0};
+    getcwd(cwd, sizeof(cwd));
+
+    lua_pushstring(L, cwd);
+    lua_pushliteral(L, "/");
+
+  #endif
+
+    lua_pushstring(L, path);
+    lua_concat(L, 3);
+
+    size_t len;
+    const char* src = lua_tolstring(L, -1, &len);
+    memcpy(path, src, len + 1);
+
+    lua_pop(L, 1);
 }
 
 void Dir_FromNativeSeparators(char* path)

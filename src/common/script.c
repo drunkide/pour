@@ -149,15 +149,47 @@ static int pmain(lua_State *L)
 
 /********************************************************************************************************************/
 
-bool Script_DoFile(const char* name)
+bool Script_DoFile(const char* name, int globalsTableIdx)
 {
     lua_State* L = gL;
+    int n = lua_gettop(L);
 
-    int status = luaL_loadfile(L, name); /* FIXME: utf-8 */
-    if (status == LUA_OK)
-        status = docall(L, 0, 0);
+    char path[DIR_MAX];
+    strcpy(path, name);
+    Dir_MakeAbsolutePath(path);
+    Dir_FromNativeSeparators(path);
+    Dir_RemoveLastPath(path);
 
-    return report(L, status) == LUA_OK;
+    if (globalsTableIdx != 0)           /* new _ENV */
+        lua_pushvalue(L, globalsTableIdx);
+    else
+        lua_newtable(L);
+
+    lua_pushvalue(L, -1);
+    lua_setfield(L, -2, "_G");          /* _ENV._G = _ENV */
+    lua_pushstring(L, path);
+    lua_setfield(L, -2, "SCRIPT_DIR");  /* _ENV.SCRIPT_DIR = <path> */
+
+    lua_newtable(L);                    /* metatable for new _ENV */
+    lua_pushglobaltable(L);
+    lua_setfield(L, -2, "__index");
+    lua_pushboolean(L, 0);
+    lua_setfield(L, -2, "__metatable");
+    lua_setmetatable(L, -2);
+
+    int status = report(L, luaL_loadfile(L, name)); /* FIXME: utf-8 */
+    if (status != LUA_OK) {
+        lua_settop(L, n);
+        return false;
+    }
+
+    lua_pushvalue(L, -2);               /* new _ENV */
+    lua_setupvalue(L, -2, 1);           /* set as upvalue #1 for the script */
+
+    status = report(L, docall(L, 0, 0));
+
+    lua_settop(L, n);
+    return status == LUA_OK;
 }
 
 int Script_RunVM(int argc, char** argv, PFNMainProc pfnMain)
