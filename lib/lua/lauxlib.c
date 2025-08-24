@@ -772,7 +772,7 @@ static int skipBOM (FILE *f) {
 */
 static int skipcomment (FILE *f, int *cp) {
   int c = *cp = skipBOM(f);
-  if (c == '#') {  /* first line is a comment (Unix exec. file)? */
+  if (c == '#' || c == '@') {  /* first line is a comment (Unix exec. file)? */
     do {  /* skip first line */
       c = getc(f);
     } while (c != EOF && c != '\n');
