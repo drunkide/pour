@@ -1,8 +1,10 @@
 #include <pour/pour_lua.h>
 #include <pour/pour.h>
 #include <common/script.h>
+#include <common/dirs.h>
 #include <common/file.h>
 #include <common/utf8.h>
+#include <malloc.h>
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -56,12 +58,18 @@ static int pour_run(lua_State* L)
 
 static int pour_shell_open(lua_State* L)
 {
-    const char* file = luaL_checkstring(L, 1);
+    size_t fileLen;
+    const char* file = luaL_checklstring(L, 1, &fileLen);
 
   #ifdef _WIN32
 
-    const WCHAR* wfile = (const WCHAR*)Utf8_PushConvertToUtf16(gL, file, NULL);
-    bool result = (INT_PTR)ShellExecuteW(NULL, L"open", wfile, NULL, NULL, 0) > 32;
+    ++fileLen;
+    char* ptr = (char*)alloca(fileLen);
+    memcpy(ptr, file, fileLen);
+    Dir_ToNativeSeparators(ptr);
+
+    const WCHAR* wfile = (const WCHAR*)Utf8_PushConvertToUtf16(gL, ptr, NULL);
+    bool result = (INT_PTR)ShellExecuteW(NULL, NULL, wfile, NULL, NULL, SW_SHOWNORMAL) > 32;
     lua_pop(gL, 1);
 
     if (!result)
