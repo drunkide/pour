@@ -11,6 +11,8 @@ set(src
     common/console.h
     common/dirs.c
     common/dirs.h
+    common/env.c
+    common/env.h
     common/exec.c
     common/exec.h
     common/file.c

@@ -1,6 +1,7 @@
 #include <pour/pour.h>
 #include <common/script.h>
 #include <common/console.h>
+#include <common/env.h>
 #include <common/dirs.h>
 #include <common/file.h>
 #include <common/exec.h>
@@ -37,6 +38,7 @@ static const char* getExecutable(const char* name)
 
 static bool loadPackageConfig(const char* package)
 {
+    lua_State* L = gL;
     char script[DIR_MAX];
 
     strcpy(script, g_packagesDir);
@@ -58,6 +60,30 @@ static bool loadPackageConfig(const char* package)
     if (!TARGET_DIR) {
         Con_PrintF(COLOR_ERROR, "ERROR: package '%s' is not available for current environment.\n", package);
         return false;
+    }
+
+    lua_getglobal(L, "EXTRA_PATH");
+    if (lua_isnoneornil(L, -1))
+        lua_pop(L, 1);
+    else {
+        lua_pushnil(L);
+        while (lua_next(L, -2) != 0) {
+            size_t strLen;
+            const char* str = lua_tolstring(L, -1, &strLen);
+
+          #ifdef _WIN32
+            ++strLen;
+            char* buf = alloca(strLen);
+            memcpy(buf, str, strLen);
+            Dir_ToNativeSeparators(buf);
+            str = buf;
+          #else
+            (void)strLen;
+          #endif
+
+            Env_PrependPath(str);
+            lua_pop(L, 1);
+        }
     }
 
     return true;
