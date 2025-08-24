@@ -3,6 +3,7 @@
 #include <common/console.h>
 #include <common/utf8.h>
 #include <common/exec.h>
+#include <pour/pour_lua.h>
 #include <lualib.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -134,6 +135,7 @@ static int pmain(lua_State *L)
     Exec_Init();
 
     luaL_openlibs(L);
+    Pour_InitLua(L);
 
     lua_gc(L, LUA_GCRESTART);  /* start GC... */
     lua_gc(L, LUA_GCGEN, 0, 0);  /* ...in generational mode */

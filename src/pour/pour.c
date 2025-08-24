@@ -1,4 +1,5 @@
 #include <pour/pour.h>
+#include <pour/pour_lua.h>
 #include <common/script.h>
 #include <common/console.h>
 #include <common/env.h>
@@ -188,6 +189,25 @@ bool Pour_Run(const char* package, int argc, char** argv)
 
 /********************************************************************************************************************/
 
+bool Pour_ExecScript(const char* script, int argc, char** argv)
+{
+    lua_State* L = gL;
+    int n = lua_gettop(L);
+
+    (void)argc;
+    (void)argv;
+
+    if (!Script_DoFile(script)) {
+        lua_settop(L, n);
+        return false;
+    }
+
+    lua_settop(L, n);
+    return true;
+}
+
+/********************************************************************************************************************/
+
 bool Pour_Install(const char* package)
 {
     lua_State* L = gL;
@@ -213,10 +233,18 @@ bool Pour_Main(int argc, char** argv)
 {
     if (argc > 1 && !strcmp(argv[1], "--run")) {
         if (argc < 3) {
-            Con_PrintF(COLOR_ERROR, "ERROR: missing parameter name after '--run'.\n");
+            Con_PrintF(COLOR_ERROR, "ERROR: missing package name after '%s'.\n", argv[1]);
             return false;
         }
         return Pour_Run(argv[2], argc - 2, argv + 2);
+    }
+
+    if (argc > 1 && !strcmp(argv[1], "--script")) {
+        if (argc < 3) {
+            Con_PrintF(COLOR_ERROR, "ERROR: missing script name after '%s'.\n", argv[1]);
+            return false;
+        }
+        return Pour_ExecScript(argv[2], argc - 2, argv + 2);
     }
 
     Package* firstPackage = NULL;

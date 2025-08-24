@@ -23,6 +23,8 @@ set(src
     common/utf8.h
     pour/pour.c
     pour/pour.h
+    pour/pour_lua.c
+    pour/pour_lua.h
     _main.c
     )
 
