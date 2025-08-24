@@ -34,7 +34,13 @@ source_group("Source Files" FILES ${src})
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}")
 
 if(NOT MSVC)
-    add_definitions(-Wall -Wextra -Werror)
+    add_definitions(
+        -Wall
+        -Wextra
+        -Werror
+        -finput-charset=UTF-8
+        -fexec-charset=UTF-8
+        )
 endif()
 
 add_executable(pour

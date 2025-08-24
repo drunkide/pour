@@ -6,8 +6,8 @@
 #include <lauxlib.h>
 
 #define STRUCT(X) \
-	struct X; \
-	typedef struct X X; \
-	struct X
+    struct X; \
+    typedef struct X X; \
+    struct X
 
 #endif
