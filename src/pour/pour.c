@@ -242,7 +242,7 @@ bool Pour_Run(const char* package, int argc, char** argv)
     if (pkg.ADJUST_ARG) {
         for (int i = 1; i < argc; i++) {
             if (argv[i][0] != '-') {
-                char path[DIR_MAX];
+                char* path = (char*)lua_newuserdata(L, DIR_MAX);
                 strcpy(path, argv[i]);
                 Dir_MakeAbsolutePath(path);
                 adjustPath(path);
