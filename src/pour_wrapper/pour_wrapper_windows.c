@@ -27,6 +27,7 @@ static HANDLE hChildJob;
 static DWORD dwChildProcessId;
 static BOOL con_initialized;
 static BOOL ctrl_c;
+static BOOL is_console;
 static BOOL print_before_pour;
 static WORD default_color;
 static CRITICAL_SECTION critical_section;
@@ -69,7 +70,7 @@ static void con_begin(WORD color)
 
     if (!con_initialized) {
         hStdOut = GetStdHandle(STD_OUTPUT_HANDLE);
-        GetConsoleScreenBufferInfo(hStdOut, &csbi);
+        is_console = GetConsoleScreenBufferInfo(hStdOut, &csbi);
         default_color = csbi.wAttributes;
         con_initialized = TRUE;
     }
@@ -94,14 +95,26 @@ static void con_printfA(WORD color, const char* fmt, ...)
     va_end(args);
 
     con_begin(color);
-    WriteConsoleA(hStdOut, buf, (DWORD)len, NULL, NULL);
+    if (is_console)
+        WriteConsoleA(hStdOut, buf, (DWORD)len, NULL, NULL);
+    else {
+        DWORD dwBytesWritten;
+        WriteFile(hStdOut, buf, (DWORD)len, &dwBytesWritten, NULL);
+    }
     con_end();
 }
 
 static void con_printW(WORD color, const TCHAR* str, ptrdiff_t len)
 {
     con_begin(color);
-    WriteConsole(hStdOut, str, (DWORD)len, NULL, NULL);
+    if (is_console)
+        WriteConsole(hStdOut, str, (DWORD)len, NULL, NULL);
+    else {
+        static char buf[65536];
+        DWORD dwBytesWritten;
+        int alen = WideCharToMultiByte(CP_ACP, 0, str, (int)len, buf, (int)sizeof(buf), 0, 0);
+        WriteFile(hStdOut, buf, (DWORD)alen, &dwBytesWritten, NULL);
+    }
     con_end();
 }
 
@@ -156,8 +169,8 @@ static void exec(const TCHAR* app, TCHAR* cmdline)
     LeaveCriticalSection(&critical_section);
 
     GetExitCodeProcess(pi.hProcess, &dwExitCode);
-    CloseHandle(pi.hThread);
-    CloseHandle(pi.hProcess);
+    /*CloseHandle(pi.hThread); -- keep file size under 4K */
+    /*CloseHandle(pi.hProcess); -- keep file size under 4K */
 
     if (dwExitCode != 0) {
         if (!app && !ctrl_c)
@@ -237,11 +250,9 @@ void entry(void)
 
     exec(path, GetCommandLine());
 
-    con_printfA(COLOR_SUCCESS, "\n=== DONE! ===\n\n");
-
     SetConsoleCtrlHandler(ctrl_handler, FALSE);
 
-    CloseHandle(hChildJob);
+    /*CloseHandle(hChildJob); -- keep file size under 4K */
     /*DeleteCriticalSection(&critical_section); -- keep file size under 4K */
 
     ExitProcess(0);

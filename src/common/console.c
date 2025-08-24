@@ -12,6 +12,7 @@ static CRITICAL_SECTION g_criticalSection;
 #endif
 
 static bool g_initialized;
+static bool g_isatty;
 
 void Con_Init()
 {
@@ -22,7 +23,7 @@ void Con_Init()
     g_hStdOut = GetStdHandle(STD_OUTPUT_HANDLE);
 
     CONSOLE_SCREEN_BUFFER_INFO csbi;
-    GetConsoleScreenBufferInfo(g_hStdOut, &csbi);
+    g_isatty = GetConsoleScreenBufferInfo(g_hStdOut, &csbi);
     g_defaultColor = csbi.wAttributes;
 
     InitializeCriticalSection(&g_criticalSection);
@@ -57,16 +58,21 @@ void Con_PrintV(ConColor color, const char* fmt, va_list args)
         case COLOR_ERROR: wAttr = (FOREGROUND_RED | FOREGROUND_INTENSITY); break;
     }
 
-    size_t len = 0;
-    const WCHAR* str16 = (const WCHAR*)Utf8_PushConvertToUtf16(gL, str, &len);
+    if (!g_isatty) {
+        DWORD dwBytesWritten;
+        WriteFile(g_hStdOut, str, strlen(str), &dwBytesWritten, NULL);
+    } else {
+        size_t len = 0;
+        const WCHAR* str16 = (const WCHAR*)Utf8_PushConvertToUtf16(gL, str, &len);
 
-    EnterCriticalSection(&g_criticalSection);
+        EnterCriticalSection(&g_criticalSection);
 
-    SetConsoleTextAttribute(g_hStdOut, wAttr);
-    WriteConsoleW(g_hStdOut, str16, (DWORD)len, NULL, NULL);
-    SetConsoleTextAttribute(g_hStdOut, g_defaultColor);
+        SetConsoleTextAttribute(g_hStdOut, wAttr);
+        WriteConsoleW(g_hStdOut, str16, (DWORD)len, NULL, NULL);
+        SetConsoleTextAttribute(g_hStdOut, g_defaultColor);
 
-    LeaveCriticalSection(&g_criticalSection);
+        LeaveCriticalSection(&g_criticalSection);
+    }
 
   #else
 
