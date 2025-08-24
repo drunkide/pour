@@ -1,6 +1,7 @@
 #ifndef COMMON_COMMON_H
 #define COMMON_COMMON_H
 
+#include <stdint.h>
 #include <stdbool.h>
 #include <lua.h>
 #include <lauxlib.h>

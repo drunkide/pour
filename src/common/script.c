@@ -1,5 +1,6 @@
 #include <common/script.h>
 #include <common/dirs.h>
+#include <common/console.h>
 #include <common/utf8.h>
 #include <lualib.h>
 #include <stdio.h>
@@ -64,7 +65,7 @@ static int report(lua_State* L, int status)
         const char* msg = lua_tostring(L, -1);
         if (msg == NULL || !*msg)
             msg = "(error message not a string)";
-        fprintf(stderr, "error: %s\n", msg);
+        Con_PrintF(COLOR_ERROR, "error: %s\n", msg);
         lua_pop(L, 1);
     }
     return status;
@@ -103,9 +104,23 @@ static int pmain(lua_State *L)
     lua_pushboolean(L, 1);  /* signal for libraries to ignore env. vars. */
     lua_setfield(L, LUA_REGISTRYINDEX, "LUA_NOENV");
 
+    Con_Init();
+
   #ifdef _WIN32
     lua_pushboolean(L, 1);
     lua_setglobal(L, "WINDOWS");
+
+    int wargc;
+    LPWSTR* wargv = CommandLineToArgvW(GetCommandLineW(), &wargc);
+    if (wargv) {
+        params->argc = wargc;
+        params->argv = (char**)lua_newuserdata(L, sizeof(char*) * wargc);
+        for (int i = 0; i < wargc; i++) {
+            params->argv[i] = (char*)Utf8_PushConvertFromUtf16(L, wargv[i]);
+            luaL_ref(L, LUA_REGISTRYINDEX);
+        }
+        LocalFree(wargv);
+    }
   #endif
 
     Dirs_Init();
@@ -154,24 +169,8 @@ int Script_RunVM(int argc, char** argv, PFNMainProc pfnMain)
 
     MainParams params;
     params.pfnMain = pfnMain;
-
-  #ifndef _WIN32
     params.argv = argv;
     params.argc = argc;
-  #else
-    LPWSTR* wargv = CommandLineToArgvW(GetCommandLineW(), &params.argc);
-    if (!wargv) {
-        params.argv = argv;
-        params.argc = argc;
-    } else {
-        params.argv = (char**)lua_newuserdata(L, sizeof(char*) * params.argc);
-        for (int i = 0; i < params.argc; i++) {
-            params.argv[i] = (char*)Utf8_PushConvertFromUtf16(L, wargv[i]);
-            luaL_ref(L, LUA_REGISTRYINDEX);
-        }
-        LocalFree(wargv);
-    }
-  #endif
 
     lua_pushcfunction(L, &pmain);
     lua_pushlightuserdata(L, &params);

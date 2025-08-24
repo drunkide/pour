@@ -112,10 +112,11 @@ const char* Utf8_PushConvertFromUtf16(lua_State*L, const void* utf16)
     return luaL_pushresult(&buf);
 }
 
-const uint16_t* Utf8_PushConvertToUtf16(lua_State* L, const char* utf8)
+const uint16_t* Utf8_PushConvertToUtf16(lua_State* L, const char* utf8, size_t* outLen)
 {
     luaL_Buffer buf;
     uint32_t codep;
+    size_t len = 0;
 
     luaL_buffinit(L, &buf);
 
@@ -124,12 +125,17 @@ const uint16_t* Utf8_PushConvertToUtf16(lua_State* L, const char* utf8)
         if (codep < 0x10000) {
             u[0] = (uint16_t)codep;
             luaL_addlstring(&buf, (char*)&u[0], sizeof(u[0]));
+            ++len;
         } else {
             u[0] = (uint16_t)(0xD7C0 + (codep >> 10));
             u[1] = (uint16_t)(0xDC00 + (codep & 0x3FF));
             luaL_addlstring(&buf, (char*)u, sizeof(u));
+            len += 2;
         }
     }
+
+    if (outLen)
+        *outLen = len;
 
     codep = 0;
     luaL_addlstring(&buf, (char*)&codep, sizeof(uint16_t));

@@ -7,6 +7,8 @@ set(src_data_packages
 
 set(src_common
     common/common.h
+    common/console.c
+    common/console.h
     common/dirs.c
     common/dirs.h
     common/exec.c

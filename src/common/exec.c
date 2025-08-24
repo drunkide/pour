@@ -1,4 +1,5 @@
 #include <common/exec.h>
+#include <common/console.h>
 #include <common/dirs.h>
 #include <common/script.h>
 #include <string.h>
@@ -52,7 +53,7 @@ bool Exec_CommandV(const char* command, const char* const* argv, int argc)
     lua_concat(L, lua_gettop(L) - start);
     const char* cmd = lua_tostring(L, -1);
 
-    printf("# %s\n", cmd);
+    Con_PrintF(COLOR_COMMAND, "# %s\n", cmd);
     if (system(cmd) != 0) {
         lua_settop(L, start);
         return false;
