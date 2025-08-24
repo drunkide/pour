@@ -2,9 +2,91 @@
 #include <common/console.h>
 #include <common/dirs.h>
 #include <common/script.h>
+#include <common/utf8.h>
 #include <string.h>
 #include <stdlib.h>
 #include <malloc.h>
+
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#define _WIN32_WINNT 0x500
+#include <windows.h>
+#ifndef JOB_OBJECT_LIMIT_KILL_ON_CLOSE
+#define JOB_OBJECT_LIMIT_KILL_ON_CLOSE 0x2000
+#endif
+static bool g_ctrlC;
+static CRITICAL_SECTION g_criticalSection;
+static HANDLE g_hChildJob;
+static DWORD g_dwChildProcessId;
+#endif
+
+static bool g_initialized;
+
+#ifdef _WIN32
+static BOOL WINAPI Exec_CtrlHandler(DWORD ctrl)
+{
+    switch (ctrl) {
+        case CTRL_C_EVENT:
+        case CTRL_BREAK_EVENT:
+            EnterCriticalSection(&g_criticalSection);
+            if (g_dwChildProcessId) {
+                GenerateConsoleCtrlEvent(ctrl, g_dwChildProcessId);
+                if (WaitForSingleObject(g_hChildJob, 50) != WAIT_OBJECT_0) {
+                    GenerateConsoleCtrlEvent(ctrl, g_dwChildProcessId);
+                    if (WaitForSingleObject(g_hChildJob, 50) != WAIT_OBJECT_0) {
+                        TerminateJobObject(g_hChildJob, (DWORD)-1);
+                        WaitForSingleObject(g_hChildJob, INFINITE);
+                    }
+                }
+            }
+            Con_PrintF(COLOR_ERROR, "\n\n=== Ctrl+C ===\n\n");
+            g_ctrlC = TRUE;
+            LeaveCriticalSection(&g_criticalSection);
+            return FALSE;
+        default:
+            return FALSE;
+    }
+}
+#endif
+
+void Exec_Init()
+{
+    if (g_initialized)
+        return;
+
+  #ifdef _WIN32
+
+    InitializeCriticalSection(&g_criticalSection);
+
+    g_hChildJob = CreateJobObject(NULL, NULL);
+    if (!g_hChildJob)
+        luaL_error(gL, "CreateJobObject failed (code 0x%p).", (void*)(size_t)GetLastError());
+
+    JOBOBJECT_BASIC_LIMIT_INFORMATION jbli;
+    ZeroMemory(&jbli, sizeof(jbli));
+    jbli.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_CLOSE;
+    SetInformationJobObject(g_hChildJob, JobObjectBasicLimitInformation, &jbli, sizeof(jbli));
+
+    SetConsoleCtrlHandler(Exec_CtrlHandler, TRUE);
+
+  #endif
+
+    g_initialized = true;
+    atexit(Exec_Terminate);
+}
+
+void Exec_Terminate()
+{
+    if (!g_initialized)
+        return;
+
+  #ifdef _WIN32
+    SetConsoleCtrlHandler(Exec_CtrlHandler, FALSE);
+    DeleteCriticalSection(&g_criticalSection);
+  #endif
+
+    g_initialized = false;
+}
 
 static void pushArgument(lua_State* L, const char* argument)
 {
@@ -44,7 +126,9 @@ bool Exec_CommandV(const char* command, const char* const* argv, int argc)
   #endif
 
     int start = lua_gettop(L);
+  #ifdef _WIN32
     lua_pushliteral(L, "cmd /C ");
+  #endif
     pushArgument(L, command);
     for (int i = 1; i < argc; i++) {
         lua_pushliteral(L, " ");
@@ -54,10 +138,58 @@ bool Exec_CommandV(const char* command, const char* const* argv, int argc)
     const char* cmd = lua_tostring(L, -1);
 
     Con_PrintF(COLOR_COMMAND, "# %s\n", cmd);
+
+  #ifdef _WIN32
+
+    WCHAR* cmd16 = (WCHAR*)Utf8_PushConvertToUtf16(gL, cmd, NULL);
+    WCHAR cwd[MAX_PATH];
+
+    cwd[0] = 0;
+    GetCurrentDirectoryW(MAX_PATH, cwd);
+
+    PROCESS_INFORMATION pi;
+    STARTUPINFOW si;
+    ZeroMemory(&pi, sizeof(pi));
+    ZeroMemory(&si, sizeof(si));
+    si.cb = sizeof(si);
+    if (!CreateProcessW(NULL, cmd16, NULL, NULL, TRUE, 0, NULL, cwd, &si, &pi)) {
+        Con_PrintF(COLOR_ERROR, "ERROR: CreateProcess failed (code 0x%p).\n", (void*)(size_t)GetLastError());
+        lua_settop(L, start);
+        return false;
+    }
+
+    AssignProcessToJobObject(g_hChildJob, pi.hProcess);
+
+    EnterCriticalSection(&g_criticalSection);
+    g_dwChildProcessId = pi.dwProcessId;
+    LeaveCriticalSection(&g_criticalSection);
+
+    WaitForSingleObject(pi.hProcess, INFINITE);
+
+    EnterCriticalSection(&g_criticalSection);
+    g_dwChildProcessId = 0;
+    LeaveCriticalSection(&g_criticalSection);
+
+    DWORD dwExitCode = (DWORD)-1;
+    GetExitCodeProcess(pi.hProcess, &dwExitCode);
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
+
+    if (dwExitCode != 0) {
+        if (!g_ctrlC)
+            Con_PrintF(COLOR_ERROR, "ERROR: command exited with code %u", dwExitCode);
+        lua_settop(L, start);
+        return false;
+    }
+
+  #else
+
     if (system(cmd) != 0) {
         lua_settop(L, start);
         return false;
     }
+
+  #endif
 
     lua_settop(L, start);
     return true;

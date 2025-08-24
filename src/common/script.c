@@ -2,6 +2,7 @@
 #include <common/dirs.h>
 #include <common/console.h>
 #include <common/utf8.h>
+#include <common/exec.h>
 #include <lualib.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -129,6 +130,8 @@ static int pmain(lua_State *L)
     lua_pushstring(L, g_toolsDir); lua_setglobal(L, "TOOLS_DIR");
     lua_pushstring(L, g_dataDir); lua_setglobal(L, "DATA_DIR");
     lua_pushstring(L, g_packagesDir); lua_setglobal(L, "PACKAGES_DIR");
+
+    Exec_Init();
 
     luaL_openlibs(L);
 
