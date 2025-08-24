@@ -1,9 +1,11 @@
 #include <common/file.h>
 #include <common/script.h>
 #include <common/utf8.h>
+#include <common/dirs.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <stdio.h>
+#include <malloc.h>
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -28,6 +30,13 @@ bool File_CreateDirectory(const char* path)
   #ifdef _WIN32
     const WCHAR* wpath = (const WCHAR*)Utf8_PushConvertToUtf16(gL, path, NULL);
     bool result = CreateDirectoryW(wpath, NULL);
+    if (!result && GetLastError() == ERROR_PATH_NOT_FOUND) {
+        size_t pathLen = strlen(path) + 1;
+        char* buf = (char*)alloca(pathLen);
+        memcpy(buf, path, pathLen);
+        if (Dir_RemoveLastPath(buf) && File_CreateDirectory(buf))
+            result = CreateDirectoryW(wpath, NULL);
+    }
     lua_pop(gL, 1);
     return result;
   #else
