@@ -98,17 +98,38 @@ static bool loadPackageConfig(int globals, const char* package)
     return true;
 }
 
+static bool ensurePackageConfigured(int globals, const char* package)
+{
+    lua_State* L = gL;
+
+    const char* POST_FETCH = getString(globals, "POST_FETCH");
+    if (!POST_FETCH)
+        return true;
+
+    lua_pushfstring(L, "%s/.pour-configured", TARGET_DIR);
+    const char* checkFile = lua_tostring(L, -1);
+    if (File_Exists(checkFile))
+        return true;
+
+    lua_newtable(L);
+    if (!Script_DoFile(POST_FETCH, lua_gettop(L))) {
+        Con_PrintF(COLOR_ERROR, "ERROR: unable to configure package '%s'.\n", package);
+        return false;
+    }
+
+    File_Write(checkFile, "", 0);
+
+    return true;
+}
+
 static bool ensurePackageInstalled(int globals, const char* package)
 {
     if (!loadPackageConfig(globals, package))
         return false;
 
     if (CHECK_FILE) {
-        char file[DIR_MAX];
-        strcpy(file, TARGET_DIR);
-        Dir_AppendPath(file, CHECK_FILE);
-        if (File_Exists(file))
-            return true;
+        if (File_Exists(CHECK_FILE))
+            return ensurePackageConfigured(globals, package);
     } else if (DEFAULT_EXECUTABLE) {
         const char* exe = getExecutable(globals, DEFAULT_EXECUTABLE);
         if (!exe) {
@@ -118,7 +139,7 @@ static bool ensurePackageInstalled(int globals, const char* package)
             return false;
         }
         if (File_Exists(exe))
-            return true;
+            return ensurePackageConfigured(globals, package);
     } else {
         Con_PrintF(COLOR_ERROR, "ERROR: missing CHECK_FILE for package '%s'.\n", package);
         return false;
@@ -134,7 +155,7 @@ static bool ensurePackageInstalled(int globals, const char* package)
             Con_PrintF(COLOR_ERROR, "ERROR: unable to download package '%s'.\n", package);
             return false;
         }
-        return true;
+        return ensurePackageConfigured(globals, package);
     }
 
     Con_PrintF(COLOR_ERROR, "ERROR: missing SOURCE_URL for package '%s'.\n", package);
