@@ -66,7 +66,7 @@ static int report(lua_State* L, int status)
         const char* msg = lua_tostring(L, -1);
         if (msg == NULL || !*msg)
             msg = "(error message not a string)";
-        Con_PrintF(COLOR_ERROR, "error: %s\n", msg);
+        Con_PrintF(COLOR_ERROR, "ERROR: %s\n", msg);
         lua_pop(L, 1);
     }
     return status;
@@ -162,7 +162,7 @@ int Script_RunVM(int argc, char** argv, PFNMainProc pfnMain)
 {
     lua_State* L = luaL_newstate();
     if (!L) {
-        fprintf(stderr, "error: Lua initialization failed.\n");
+        fprintf(stderr, "ERROR: Lua initialization failed.\n");
         return EXIT_FAILURE;
     }
 

@@ -43,7 +43,7 @@ static bool loadPackageConfig(const char* package)
     Dir_AppendPath(script, package);
     strcat(script, ".lua");
     if (!File_Exists(script)) {
-        Con_PrintF(COLOR_ERROR, "error: unknown package '%s'.\n", package);
+        Con_PrintF(COLOR_ERROR, "ERROR: unknown package '%s'.\n", package);
         return false;
     }
 
@@ -56,7 +56,7 @@ static bool loadPackageConfig(const char* package)
     DEFAULT_EXECUTABLE = getExecutable(DEFAULT_EXECUTABLE_ID);
 
     if (!TARGET_DIR) {
-        Con_PrintF(COLOR_ERROR, "error: package '%s' is not available for current environment.\n", package);
+        Con_PrintF(COLOR_ERROR, "ERROR: package '%s' is not available for current environment.\n", package);
         return false;
     }
 
@@ -79,7 +79,7 @@ static bool ensurePackageInstalled(const char* package)
         const char* exe = getExecutable(DEFAULT_EXECUTABLE);
         if (!exe) {
             Con_PrintF(COLOR_ERROR,
-                "error: configuration for package '%s' is corrupt (missing executable '%s').\n",
+                "ERROR: configuration for package '%s' is corrupt (missing executable '%s').\n",
                 package, DEFAULT_EXECUTABLE);
             return false;
         }
@@ -87,7 +87,7 @@ static bool ensurePackageInstalled(const char* package)
             return true;
     }
     else {
-        Con_PrintF(COLOR_ERROR, "error: missing CHECK_FILE for package '%s'.\n", package);
+        Con_PrintF(COLOR_ERROR, "ERROR: missing CHECK_FILE for package '%s'.\n", package);
         return false;
     }
 
@@ -98,13 +98,13 @@ static bool ensurePackageInstalled(const char* package)
         argv[2] = SOURCE_URL;
         argv[3] = TARGET_DIR;
         if (!Exec_Command(argv, 4)) {
-            Con_PrintF(COLOR_ERROR, "error: unable to download package '%s'.\n", package);
+            Con_PrintF(COLOR_ERROR, "ERROR: unable to download package '%s'.\n", package);
             return false;
         }
         return true;
     }
 
-    Con_PrintF(COLOR_ERROR, "error: missing SOURCE_URL for package '%s'.\n", package);
+    Con_PrintF(COLOR_ERROR, "ERROR: missing SOURCE_URL for package '%s'.\n", package);
     return false;
 }
 
@@ -136,18 +136,18 @@ bool Pour_Run(const char* package, int argc, char** argv)
     if (executable) {
         exe = getExecutable(executable);
         if (!exe) {
-            Con_PrintF(COLOR_ERROR, "error: there is no executable '%s' in package '%s'.\n", executable, package);
+            Con_PrintF(COLOR_ERROR, "ERROR: there is no executable '%s' in package '%s'.\n", executable, package);
             goto error;
         }
     } else {
         if (!DEFAULT_EXECUTABLE) {
-            Con_PrintF(COLOR_ERROR, "error: there is no default executable in package '%s'.\n", package);
+            Con_PrintF(COLOR_ERROR, "ERROR: there is no default executable in package '%s'.\n", package);
             goto error;
         }
         exe = getExecutable(DEFAULT_EXECUTABLE);
         if (!exe) {
             Con_PrintF(COLOR_ERROR,
-                "error: configuration for package '%s' is corrupt (missing executable '%s').\n",
+                "ERROR: configuration for package '%s' is corrupt (missing executable '%s').\n",
                 package, DEFAULT_EXECUTABLE);
             goto error;
         }
@@ -187,7 +187,7 @@ bool Pour_Main(int argc, char** argv)
 {
     if (argc > 1 && !strcmp(argv[1], "--run")) {
         if (argc < 3) {
-            Con_PrintF(COLOR_ERROR, "error: missing parameter name after '--run'.\n");
+            Con_PrintF(COLOR_ERROR, "ERROR: missing parameter name after '--run'.\n");
             return false;
         }
         return Pour_Run(argv[2], argc - 2, argv + 2);
@@ -214,13 +214,13 @@ bool Pour_Main(int argc, char** argv)
             Con_PrintF(COLOR_DEFAULT, "    or pour --run package [options]\n");
             return false;
         } else {
-            Con_PrintF(COLOR_ERROR, "error: invalid command line argument \"%s\".\n", argv[i]);
+            Con_PrintF(COLOR_ERROR, "ERROR: invalid command line argument \"%s\".\n", argv[i]);
             return false;
         }
     }
 
     if (!firstPackage) {
-        Con_PrintF(COLOR_ERROR, "error: missing package name on the command line.\n");
+        Con_PrintF(COLOR_ERROR, "ERROR: missing package name on the command line.\n");
         return false;
     }
 
