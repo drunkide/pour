@@ -186,11 +186,7 @@ static void adjustPath(char* dst)
     if ((dst[0] >= 'a' && dst[0] <= 'z') && dst[1] == ':') {
         dst[1] = dst[0];
         dst[0] = '/';
-
-        for (char* p = dst; *p; ++p) {
-            if (*p == '\\')
-                *p = '/';
-        }
+        Dir_FromNativeSeparators(dst + 2);
     }
 }
 
@@ -245,9 +241,12 @@ bool Pour_Run(const char* package, int argc, char** argv)
 
     if (pkg.ADJUST_ARG) {
         for (int i = 1; i < argc; i++) {
-            if (argv[i][0] != '-')
-                adjustPath(argv[i]);
-            else {
+            if (argv[i][0] != '-') {
+                char path[DIR_MAX];
+                strcpy(path, argv[i]);
+                Dir_MakeAbsolutePath(path);
+                adjustPath(path);
+            } else {
                 if (argv[i][1] == 'I')
                     adjustPath(argv[i] + 2);
                 else if (argv[i][1] == 'L')
