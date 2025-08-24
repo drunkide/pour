@@ -19,3 +19,23 @@ bool File_Exists(const char* path)
     return stat(path, &st) == 0;
   #endif
 }
+
+bool File_CreateDirectory(const char* path)
+{
+  #ifdef _WIN32
+    const WCHAR* wpath = (const WCHAR*)Utf8_PushConvertToUtf16(gL, path, NULL);
+    return CreateDirectoryW(wpath, NULL);
+  #else
+    return mkdir(path) == 0;
+  #endif
+}
+
+bool File_SetCurrentDirectory(const char* path)
+{
+  #ifdef _WIN32
+    const WCHAR* wpath = (const WCHAR*)Utf8_PushConvertToUtf16(gL, path, NULL);
+    return SetCurrentDirectoryW(wpath);
+  #else
+    return setcwd(path) == 0;
+  #endif
+}

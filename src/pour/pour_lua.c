@@ -1,5 +1,26 @@
 #include <pour/pour_lua.h>
 #include <pour/pour.h>
+#include <common/file.h>
+
+static int pour_chdir(lua_State* L)
+{
+    const char* file = luaL_checkstring(L, 1);
+
+    if (!File_Exists(file))
+        File_CreateDirectory(file);
+
+    if (!File_SetCurrentDirectory(file))
+        return luaL_error(L, "can't change directory to \"%s\".", file);
+
+    return 1;
+}
+
+static int pour_file_exists(lua_State* L)
+{
+    const char* file = luaL_checkstring(L, 1);
+    lua_pushboolean(L, File_Exists(file));
+    return 1;
+}
 
 static int pour_require(lua_State* L)
 {
@@ -28,6 +49,8 @@ static int pour_run(lua_State* L)
 /********************************************************************************************************************/
 
 static const luaL_Reg funcs[] = {
+    { "chdir", pour_chdir },
+    { "file_exists", pour_file_exists },
     { "require", pour_require },
     { "run", pour_run },
     { NULL, NULL }
