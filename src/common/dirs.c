@@ -1,6 +1,7 @@
 #include <common/dirs.h>
 #include <common/script.h>
 #include <common/utf8.h>
+#include <common/file.h>
 #include <string.h>
 
 #ifdef _WIN32
@@ -132,25 +133,8 @@ void Dir_MakeAbsolutePath(char* path)
     if (Dir_IsAbsolutePath(path))
         return;
 
-  #ifdef _WIN32
-
-    WCHAR cwd[MAX_PATH];
-    cwd[0] = 0;
-    GetCurrentDirectoryW(MAX_PATH, cwd);
-
-    Utf8_PushConvertFromUtf16(L, cwd);
-    lua_pushliteral(L, "\\");
-
-  #else
-
-    char cwd[PATH_MAX] = {0};
-    getcwd(cwd, sizeof(cwd));
-
-    lua_pushstring(L, cwd);
-    lua_pushliteral(L, "/");
-
-  #endif
-
+    File_PushCurrentDirectory(gL);
+    lua_pushliteral(L, DIR_SEPARATOR);
     lua_pushstring(L, path);
     lua_concat(L, 3);
 

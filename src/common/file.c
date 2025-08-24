@@ -44,6 +44,28 @@ bool File_CreateDirectory(const char* path)
   #endif
 }
 
+void File_PushCurrentDirectory(lua_State* L)
+{
+  #ifdef _WIN32
+
+    WCHAR cwd[MAX_PATH];
+    cwd[0] = 0;
+    if (!GetCurrentDirectoryW(MAX_PATH, cwd))
+        luaL_error(L, "GetCurrentDirectory() failed.");
+
+    Utf8_PushConvertFromUtf16(L, cwd);
+
+  #else
+
+    char cwd[PATH_MAX] = {0};
+    if (!getcwd(cwd, sizeof(cwd)))
+        luaL_error(L, "getcwd() failed.");
+
+    lua_pushstring(L, cwd);
+
+  #endif
+}
+
 bool File_SetCurrentDirectory(const char* path)
 {
   #ifdef _WIN32

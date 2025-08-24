@@ -3,6 +3,12 @@
 
 #include <common/common.h>
 
+#ifdef _WIN32
+#define DIR_SEPARATOR "\\"
+#else
+#define DIR_SEPARATOR "/"
+#endif
+
 #define DIR_MAX 1024
 
 extern const char* const g_rootDir;

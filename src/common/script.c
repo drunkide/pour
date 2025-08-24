@@ -3,6 +3,7 @@
 #include <common/console.h>
 #include <common/utf8.h>
 #include <common/exec.h>
+#include <common/file.h>
 #include <pour/pour_lua.h>
 #include <lualib.h>
 #include <stdio.h>
@@ -154,6 +155,9 @@ bool Script_DoFile(const char* name, int globalsTableIdx)
     lua_State* L = gL;
     int n = lua_gettop(L);
 
+    File_PushCurrentDirectory(L);
+    int curdir = lua_gettop(L);
+
     char path[DIR_MAX];
     strcpy(path, name);
     Dir_MakeAbsolutePath(path);
@@ -187,6 +191,10 @@ bool Script_DoFile(const char* name, int globalsTableIdx)
     lua_setupvalue(L, -2, 1);           /* set as upvalue #1 for the script */
 
     status = report(L, docall(L, 0, 0));
+
+    const char* oldcwd = lua_tostring(L, curdir);
+    if (!File_SetCurrentDirectory(oldcwd))
+        luaL_error(L, "unable to restore working directory to \"%s\".", oldcwd);
 
     lua_settop(L, n);
     return status == LUA_OK;
