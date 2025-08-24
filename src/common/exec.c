@@ -2,6 +2,7 @@
 #include <common/dirs.h>
 #include <common/script.h>
 #include <string.h>
+#include <stdlib.h>
 #include <malloc.h>
 
 static void pushArgument(lua_State* L, const char* argument)

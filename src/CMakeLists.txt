@@ -46,6 +46,11 @@ add_executable(pour
 
 target_link_libraries(pour PRIVATE lua)
 
+if(WIN32)
+    set_target_properties(pour PROPERTIES
+        SUFFIX ".exe")
+endif()
+
 if(NOT MSVC)
     set_target_properties(pour PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
