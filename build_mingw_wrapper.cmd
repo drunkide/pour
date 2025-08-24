@@ -1,7 +1,7 @@
 @echo off
 setlocal
 set "PATH=%~dp0tools\win32-mingw440-32\bin;%PATH%"
-call "%~dp0tools\mingw440-32.cmd" || exit /B 1
+call "%~dp0tools\mingw-4.4.0-32.cmd" || exit /B 1
 
 cd "%~dp0" || exit /B 1
 
