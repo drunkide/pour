@@ -271,6 +271,8 @@ STRUCT(PackageName) {
 
 bool Pour_Main(int argc, char** argv)
 {
+    Env_Set("POUR_EXECUTABLE", argv[0]);
+
     if (argc > 1 && !strcmp(argv[1], "--run")) {
         if (argc < 3) {
             Con_PrintF(COLOR_ERROR, "ERROR: missing package name after '%s'.\n", argv[1]);

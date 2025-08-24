@@ -5,8 +5,9 @@ if WINDOWS then
     EXTRA_PATH = { TARGET_DIR..'/bin' }
     EXECUTABLE = {
         _default_ = 'gcc',
-        ['ar' ] = TARGET_DIR..'/bin/ar.exe',
-        ['gcc'] = TARGET_DIR..'/bin/gcc.exe',
-        ['g++'] = TARGET_DIR..'/bin/g++.exe',
+        ['ar'    ] = TARGET_DIR..'/bin/ar.exe',
+        ['ranlib'] = TARGET_DIR..'/bin/ranlib.exe',
+        ['gcc'   ] = TARGET_DIR..'/bin/gcc.exe',
+        ['g++'   ] = TARGET_DIR..'/bin/g++.exe',
     }
 end

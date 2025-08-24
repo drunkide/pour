@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <signal.h>
+#include <malloc.h>
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -124,6 +125,10 @@ static int pmain(lua_State *L)
         }
         LocalFree(wargv);
     }
+
+    WCHAR* buf = (WCHAR*)alloca(sizeof(WCHAR) * MAX_PATH);
+    if (GetModuleFileNameW(NULL, buf, MAX_PATH))
+        params->argv[0] = (char*)Utf8_PushConvertFromUtf16(L, buf);
   #endif
 
     Dirs_Init();
