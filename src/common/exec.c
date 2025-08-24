@@ -179,7 +179,7 @@ bool Exec_CommandV(const char* command, const char* const* argv, int argc)
 
     if (dwExitCode != 0) {
         if (!g_ctrlC)
-            Con_PrintF(COLOR_ERROR, "ERROR: command exited with code %u", dwExitCode);
+            Con_PrintF(COLOR_ERROR, "ERROR: command exited with code %d", (int)dwExitCode);
         lua_settop(L, start);
         return false;
     }
