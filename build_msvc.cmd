@@ -1,0 +1,21 @@
+@echo off
+setlocal
+cd "%~dp0" || exit /B 1
+
+if exist build\msvc\pour.sln goto skip_cmake
+
+if not exist build mkdir build
+if not exist build\msvc mkdir build\msvc
+cd build\msvc || exit /B 1
+
+call "%~dp0tools\cmake-3.31.4.cmd" ^
+    "%~dp0" ^
+    || exit /B 1
+
+:skip_cmake
+
+cd "%~dp0build\msvc" || exit /B 1
+
+call "%~dp0tools\cmake-3.31.4.cmd" ^
+    --build . ^
+    || exit /B 1
