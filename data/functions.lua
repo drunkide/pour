@@ -42,7 +42,7 @@ function msvc2022_32_generate(srcdir, bindir, extra)
     pour.run('cmake-3.31.4',
             '-A', 'Win32',
             '-G', 'Visual Studio 17 2022',
-            unpack(extra or {}),
+            table.unpack(extra or {}),
             srcdir
         )
 end
@@ -50,7 +50,27 @@ end
 function msvc2022_32(srcdir, bindir, sln, configs, extra)
     pour.chdir(bindir)
     if not pour.file_exists(sln) then
-        msvc2022_generate(srcdir, bindir, extra)
+        msvc2022_32_generate(srcdir, bindir, extra)
+    end
+    for k, v in ipairs(configs) do
+        pour.run('cmake-3.31.4', '--build', '.', '--config', v)
+    end
+end
+
+function msvc2022_64_generate(srcdir, bindir, extra)
+    pour.chdir(bindir)
+    pour.run('cmake-3.31.4',
+            '-A', 'x64',
+            '-G', 'Visual Studio 17 2022',
+            table.unpack(extra or {}),
+            srcdir
+        )
+end
+
+function msvc2022_64(srcdir, bindir, sln, configs, extra)
+    pour.chdir(bindir)
+    if not pour.file_exists(sln) then
+        msvc2022_64_generate(srcdir, bindir, extra)
     end
     for k, v in ipairs(configs) do
         pour.run('cmake-3.31.4', '--build', '.', '--config', v)
