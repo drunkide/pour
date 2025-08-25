@@ -1,5 +1,6 @@
 
 ----------------------------------------------------------------------------------------------------------------------
+if WINDOWS then
 
 function mingw32_810_generate(srcdir, bindir, buildtype)
     pour.require("mingw32-8.1.0")
@@ -20,7 +21,9 @@ function mingw32_810(srcdir, bindir, buildtype, exe)
     pour.run('cmake-3.5.2', '--build', '.')
 end
 
+end
 ----------------------------------------------------------------------------------------------------------------------
+if WINDOWS then
 
 function mingw64_810_generate(srcdir, bindir, buildtype)
     pour.require("mingw64-8.1.0")
@@ -41,7 +44,39 @@ function mingw64_810(srcdir, bindir, buildtype, exe)
     pour.run('cmake-3.5.2', '--build', '.')
 end
 
+end
 ----------------------------------------------------------------------------------------------------------------------
+if WINDOWS then
+
+function clang_400_generate(srcdir, bindir, buildtype, extra)
+    local e = { table.unpack(extra or {}) }
+    e[#e + 1] = srcdir
+    pour.require("clang-4.0.0")
+    pour.require("ninja")
+    pour.chdir(bindir)
+    pour.run('cmake-3.31.4',
+            '-G', 'Ninja',
+            '-DCMAKE_BUILD_TYPE='..buildtype,
+            '-DCMAKE_SYSTEM_NAME=Windows-GNU',
+            '-DCMAKE_C_COMPILER=clang',
+            '-DCMAKE_C_COMPILER_WORKS=TRUE',
+            '-DCMAKE_CXX_COMPILER=clang++',
+            '-DCMAKE_CXX_COMPILER_WORKS=TRUE',
+            table.unpack(e)
+        )
+end
+
+function clang_400(srcdir, bindir, buildtype, exe, extra)
+    pour.chdir(bindir)
+    if not pour.file_exists(exe) then
+        clang_400_generate(srcdir, bindir, buildtype, extra)
+    end
+    pour.run('cmake-3.31.4', '--build', '.')
+end
+
+end
+----------------------------------------------------------------------------------------------------------------------
+if WINDOWS then
 
 function msvc2022_32_generate(srcdir, bindir, extra)
     local e = { table.unpack(extra or {}) }
@@ -64,7 +99,9 @@ function msvc2022_32(srcdir, bindir, sln, configs, extra)
     end
 end
 
+end
 ----------------------------------------------------------------------------------------------------------------------
+if WINDOWS then
 
 function msvc2022_64_generate(srcdir, bindir, extra)
     local e = { table.unpack(extra or {}) }
@@ -87,7 +124,9 @@ function msvc2022_64(srcdir, bindir, sln, configs, extra)
     end
 end
 
+end
 ----------------------------------------------------------------------------------------------------------------------
+if WINDOWS then
 
 function egcs_112_generate(srcdir, bindir, buildtype)
     pour.require("egcs-1.1.2")
@@ -107,4 +146,6 @@ function egcs_112(srcdir, bindir, buildtype, exe)
         egcs_112_generate(srcdir, bindir, buildtype)
     end
     pour.run('cmake-3.5.2', '--build', '.')
+end
+
 end
