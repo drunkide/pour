@@ -227,7 +227,6 @@ void entry(void)
         DWORD pathLen = GetModuleFileName(NULL, path, MAX_PATH);
         pSlash = path + pathLen;
         pSlash = prev_slash(pSlash, path);
-        pSlash = prev_slash(pSlash - 1, path);
         pSlash = mycpy(pSlash, POUR_DIR);
 
         *mycpy(pSlash, "\\CMakeLists.txt") = 0;
