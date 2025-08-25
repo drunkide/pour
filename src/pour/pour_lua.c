@@ -56,7 +56,7 @@ static int pour_run(lua_State* L)
         memcpy(argv[i], arg, argLen);
     }
 
-    if (!Pour_Run(package, argc, argv))
+    if (!Pour_Run(package, NULL, argc, argv))
         return luaL_error(L, "command execution failed.");
 
     return 0;

@@ -108,12 +108,12 @@ static void pushArgument(lua_State* L, const char* argument)
         lua_pushliteral(L, "\"");
 }
 
-bool Exec_Command(const char* const* argv, int argc)
+bool Exec_Command(const char* const* argv, int argc, const char* chdir)
 {
-    return Exec_CommandV(argv[0], argv, argc);
+    return Exec_CommandV(argv[0], argv, argc, chdir);
 }
 
-bool Exec_CommandV(const char* command, const char* const* argv, int argc)
+bool Exec_CommandV(const char* command, const char* const* argv, int argc, const char* chdir)
 {
     lua_State* L = gL;
     luaL_checkstack(L, 100, NULL);
@@ -144,10 +144,15 @@ bool Exec_CommandV(const char* command, const char* const* argv, int argc)
   #ifdef _WIN32
 
     WCHAR* cmd16 = (WCHAR*)Utf8_PushConvertToUtf16(gL, cmd, NULL);
-    WCHAR cwd[MAX_PATH];
+    WCHAR* cwd, cwdbuf[MAX_PATH];
 
-    cwd[0] = 0;
-    GetCurrentDirectoryW(MAX_PATH, cwd);
+    if (chdir)
+        cwd = (WCHAR*)Utf8_PushConvertToUtf16(gL, chdir, NULL);
+    else {
+        cwdbuf[0] = 0;
+        GetCurrentDirectoryW(MAX_PATH, cwdbuf);
+        cwd = cwdbuf;
+    }
 
     PROCESS_INFORMATION pi;
     STARTUPINFOW si;

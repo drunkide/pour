@@ -7,6 +7,7 @@
 typedef enum ConColor {
     COLOR_DEFAULT = 0,
     COLOR_COMMAND,
+    COLOR_WARNING,
     COLOR_ERROR
 } ConColor;
 

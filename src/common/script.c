@@ -161,7 +161,7 @@ static int pmain(lua_State *L)
 
 /********************************************************************************************************************/
 
-bool Script_DoFile(const char* name, int globalsTableIdx)
+bool Script_DoFile(const char* name, const char* chdir, int globalsTableIdx)
 {
     lua_State* L = gL;
     int n = lua_gettop(L);
@@ -194,6 +194,12 @@ bool Script_DoFile(const char* name, int globalsTableIdx)
 
     int status = report(L, luaL_loadfile(L, name)); /* FIXME: utf-8 */
     if (status != LUA_OK) {
+        lua_settop(L, n);
+        return false;
+    }
+
+    if (chdir && !File_SetCurrentDirectory(chdir)) {
+        luaL_error(L, "unable to change working directory to \"%s\".", chdir);
         lua_settop(L, n);
         return false;
     }

@@ -71,7 +71,7 @@ static bool loadPackageConfig(Package* pkg, const char* package)
         return false;
     }
 
-    if (!Script_DoFile(script, pkg->globalsTable))
+    if (!Script_DoFile(script, NULL, pkg->globalsTable))
         return false;
 
     pkg->TARGET_DIR = getString(pkg, "TARGET_DIR");
@@ -126,7 +126,7 @@ static bool ensurePackageConfigured(Package* pkg, const char* package)
         return true;
 
     lua_newtable(L);
-    if (!Script_DoFile(POST_FETCH, lua_gettop(L))) {
+    if (!Script_DoFile(POST_FETCH, NULL, lua_gettop(L))) {
         Con_PrintF(COLOR_ERROR, "ERROR: unable to configure package '%s'.\n", package);
         return false;
     }
@@ -165,7 +165,7 @@ static bool ensurePackageInstalled(Package* pkg, const char* package)
         argv[1] = "clone";
         argv[2] = pkg->SOURCE_URL;
         argv[3] = pkg->TARGET_DIR;
-        if (!Exec_Command(argv, 4)) {
+        if (!Exec_Command(argv, 4, NULL)) {
             Con_PrintF(COLOR_ERROR, "ERROR: unable to download package '%s'.\n", package);
             return false;
         }
@@ -190,7 +190,7 @@ static void adjustPath(char* dst)
     }
 }
 
-bool Pour_Run(const char* package, int argc, char** argv)
+bool Pour_Run(const char* package, const char* chdir, int argc, char** argv)
 {
     lua_State* L = gL;
     int n = lua_gettop(L);
@@ -256,7 +256,7 @@ bool Pour_Run(const char* package, int argc, char** argv)
         }
     }
 
-    if (!Exec_CommandV(exe, (const char* const*)argv, argc))
+    if (!Exec_CommandV(exe, (const char* const*)argv, argc, chdir))
         goto error;
 
     lua_settop(L, n);
@@ -265,7 +265,7 @@ bool Pour_Run(const char* package, int argc, char** argv)
 
 /********************************************************************************************************************/
 
-bool Pour_ExecScript(const char* script, int argc, char** argv)
+bool Pour_ExecScript(const char* script, const char* chdir, int argc, char** argv)
 {
     lua_State* L = gL;
     int n = lua_gettop(L);
@@ -273,7 +273,7 @@ bool Pour_ExecScript(const char* script, int argc, char** argv)
     (void)argc;
     (void)argv;
 
-    if (!Script_DoFile(script, 0)) {
+    if (!Script_DoFile(script, chdir, 0)) {
         lua_settop(L, n);
         return false;
     }
@@ -311,28 +311,45 @@ STRUCT(PackageName) {
 
 bool Pour_Main(int argc, char** argv)
 {
+    const char* chdir = NULL;
+    int n = 1;
+
     Env_Set("POUR_EXECUTABLE", argv[0]);
 
-    if (argc > 1 && !strcmp(argv[1], "--run")) {
-        if (argc < 3) {
-            Con_PrintF(COLOR_ERROR, "ERROR: missing package name after '%s'.\n", argv[1]);
+    if (argc > n && !strcmp(argv[n], "--chdir")) {
+        if (argc < n + 2) {
+            Con_PrintF(COLOR_ERROR, "ERROR: missing directory name after '%s'.\n", argv[n]);
             return false;
         }
-        return Pour_Run(argv[2], argc - 2, argv + 2);
+        chdir = argv[++n];
+        ++n;
     }
 
-    if (argc > 1 && !strcmp(argv[1], "--script")) {
-        if (argc < 3) {
-            Con_PrintF(COLOR_ERROR, "ERROR: missing script name after '%s'.\n", argv[1]);
+    if (argc > n && !strcmp(argv[n], "--run")) {
+        if (argc < n + 2) {
+            Con_PrintF(COLOR_ERROR, "ERROR: missing package name after '%s'.\n", argv[n]);
             return false;
         }
-        return Pour_ExecScript(argv[2], argc - 2, argv + 2);
+        ++n;
+        return Pour_Run(argv[n], chdir, argc - n, argv + n);
     }
+
+    if (argc > n && !strcmp(argv[n], "--script")) {
+        if (argc < n + 2) {
+            Con_PrintF(COLOR_ERROR, "ERROR: missing script name after '%s'.\n", argv[n]);
+            return false;
+        }
+        ++n;
+        return Pour_ExecScript(argv[n], chdir, argc - n, argv + n);
+    }
+
+    if (chdir)
+        Con_PrintF(COLOR_WARNING, "WARNING: unexpected command line argument \"%s\", ignored.\n", "--chdir");
 
     PackageName* firstPackage = NULL;
     PackageName* lastPackage = NULL;
 
-    for (int i = 1; i < argc; i++) {
+    for (int i = n; i < argc; i++) {
         if (argv[i][0] != '-') {
             PackageName* p = (PackageName*)lua_newuserdata(gL, sizeof(PackageName));
             p->next = NULL;
