@@ -147,6 +147,7 @@ static int pmain(lua_State *L)
     int status = luaL_loadbuffer(L, (const char*)functions_lua, sizeof(functions_lua), "@functions.lua");
     if (report(L, status) != 0)
         return 0;
+    lua_call(L, 0, 0);
 
     lua_gc(L, LUA_GCRESTART);  /* start GC... */
     lua_gc(L, LUA_GCGEN, 0, 0);  /* ...in generational mode */
