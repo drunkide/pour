@@ -1,4 +1,5 @@
 #include <common/dirs.h>
+#include <common/env.h>
 #include <common/script.h>
 #include <common/utf8.h>
 #include <common/file.h>
@@ -10,12 +11,12 @@
 #endif
 
 static char g_rootDir_[DIR_MAX];
-static char g_toolsDir_[DIR_MAX];
+static char g_installDir_[DIR_MAX];
 static char g_dataDir_[DIR_MAX];
 static char g_packagesDir_[DIR_MAX];
 
 const char* const g_rootDir = g_rootDir_;
-const char* const g_toolsDir = g_toolsDir_;
+const char* const g_installDir = g_installDir_;
 const char* const g_dataDir = g_dataDir_;
 const char* const g_packagesDir = g_packagesDir_;
 
@@ -187,8 +188,13 @@ void Dirs_Init(void)
     Dir_RemoveLastPath(g_rootDir_); /* remove 'src' */
     Dir_FromNativeSeparators(g_rootDir_);
 
-    strcpy(g_toolsDir_, g_rootDir_);
-    Dir_AppendPath(g_toolsDir_, "tools");
+    if (Env_PushGet("POUR_PACKAGE_DIR")) {
+        strcpy(g_installDir_, lua_tostring(gL, -1));
+        lua_pop(gL, 1);
+    } else {
+        strcpy(g_installDir_, g_rootDir_);
+        Dir_AppendPath(g_installDir_, "tools");
+    }
 
     strcpy(g_dataDir_, g_rootDir_);
     Dir_AppendPath(g_dataDir_, "data");

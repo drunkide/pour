@@ -17,7 +17,7 @@
 #define COLOR_ERROR (FOREGROUND_RED | FOREGROUND_INTENSITY)
 #define COLOR_COMMAND (FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY)
 
-static const char POUR_DIR[] = "build\\_pour";
+static const char POUR_DIR[] = "_pour";
 static const char POUR_EXE[] = "\\build\\mingw32\\pour.exe";
 
 /********************************************************************************************************************/

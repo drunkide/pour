@@ -7,6 +7,35 @@
 #include <windows.h>
 #endif
 
+const char* Env_PushGet(const char* variable)
+{
+    lua_State* L = gL;
+
+  #ifdef _WIN32
+
+    const WCHAR* name16 = (const WCHAR*)Utf8_PushConvertToUtf16(L, variable, NULL);
+
+    WCHAR buf[32768];
+    DWORD len = GetEnvironmentVariableW(name16, buf, sizeof(buf) / sizeof(buf[0]));
+    lua_pop(L, 1);
+
+    if (len == 0 || len > sizeof(buf) / sizeof(buf[0]))
+        return NULL;
+
+    return Utf8_PushConvertFromUtf16(L, buf);
+
+  #else
+
+    const char* env = getenv(variable);
+    if (!env)
+        return NULL;
+
+    lua_pushstring(L, env);
+    return lua_tostring(L, -1);
+
+  #endif
+}
+
 void Env_Set(const char* variable, const char* value)
 {
     lua_State* L = gL;

@@ -135,7 +135,7 @@ static int pmain(lua_State *L)
     Dirs_Init();
 
     lua_pushstring(L, g_rootDir); lua_setglobal(L, "ROOT_DIR");
-    lua_pushstring(L, g_toolsDir); lua_setglobal(L, "TOOLS_DIR");
+    lua_pushstring(L, g_installDir); lua_setglobal(L, "INSTALL_DIR");
     lua_pushstring(L, g_dataDir); lua_setglobal(L, "DATA_DIR");
     lua_pushstring(L, g_packagesDir); lua_setglobal(L, "PACKAGES_DIR");
 

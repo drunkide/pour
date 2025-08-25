@@ -12,7 +12,7 @@
 #define DIR_MAX 1024
 
 extern const char* const g_rootDir;
-extern const char* const g_toolsDir;
+extern const char* const g_installDir;
 extern const char* const g_dataDir;
 extern const char* const g_packagesDir;
 

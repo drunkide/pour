@@ -1,7 +1,7 @@
 
 if WINDOWS then
     SOURCE_URL = 'https://github.com/thirdpartystuff/win32-mingw810-64'
-    TARGET_DIR = TOOLS_DIR..'/win32-mingw810-64'
+    TARGET_DIR = INSTALL_DIR..'/win32-mingw810-64'
     EXTRA_PATH = { TARGET_DIR..'/bin' }
     EXECUTABLE = {
         _default_ = 'gcc',

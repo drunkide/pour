@@ -1,7 +1,7 @@
 
 if WINDOWS then
     SOURCE_URL = 'https://github.com/thirdpartystuff/egcs-1.1.2'
-    TARGET_DIR = TOOLS_DIR..'/egcs-1.1.2'
+    TARGET_DIR = INSTALL_DIR..'/egcs-1.1.2'
     EXTRA_PATH = { TARGET_DIR }
     EXECUTABLE = {
         _default_ = 'gcc',
