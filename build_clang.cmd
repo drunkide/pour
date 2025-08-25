@@ -1,6 +1,7 @@
 @echo off
 setlocal
-set "PATH=%~dp0tools\win32-clang-4.0.0\bin;%PATH%"
+if "%POUR_PACKAGE_DIR%" == "" set POUR_PACKAGE_DIR=%~dp0tools
+set "PATH=%POUR_PACKAGE_DIR%\win32-clang-4.0.0\bin;%PATH%"
 call "%~dp0tools\clang-4.0.0.cmd" || exit /B 1
 
 cd "%~dp0" || exit /B 1
@@ -20,8 +21,8 @@ call "%~dp0tools\cmake-3.5.2.cmd" ^
     -DCMAKE_CXX_COMPILER=clang ^
     -DCMAKE_CXX_COMPILER_WORKS=TRUE ^
     -DCMAKE_MAKE_PROGRAM="%~dp0tools\ninja.cmd" ^
-    -DCMAKE_AR="%~dp0tools\win32-clang-4.0.0\bin\llvm-ar" ^
-    -DCMAKE_RANLIB="%~dp0tools\win32-clang-4.0.0\bin\llvm-ranlib" ^
+    -DCMAKE_AR="%POUR_PACKAGE_DIR%\win32-clang-4.0.0\bin\llvm-ar" ^
+    -DCMAKE_RANLIB="%POUR_PACKAGE_DIR%\win32-clang-4.0.0\bin\llvm-ranlib" ^
     -DCMAKE_C_FLAGS="-target i686-w64-mingw32" ^
     -DWIN32=TRUE ^
     "%~dp0" ^
