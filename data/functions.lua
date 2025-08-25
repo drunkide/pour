@@ -3,8 +3,8 @@
 if WINDOWS then
 
 function mingw32_810_generate(srcdir, bindir, buildtype)
-    pour.require("mingw32-8.1.0")
     pour.require("ninja")
+    pour.require("mingw32-8.1.0")
     pour.chdir(bindir)
     pour.run('cmake-3.5.2',
             '-G', 'Ninja',
@@ -14,6 +14,8 @@ function mingw32_810_generate(srcdir, bindir, buildtype)
 end
 
 function mingw32_810(srcdir, bindir, buildtype, exe)
+    pour.require("ninja")
+    pour.require("mingw32-8.1.0")
     pour.chdir(bindir)
     if not pour.file_exists(exe) then
         mingw32_810_generate(srcdir, bindir, buildtype)
@@ -26,8 +28,8 @@ end
 if WINDOWS then
 
 function mingw64_810_generate(srcdir, bindir, buildtype)
-    pour.require("mingw64-8.1.0")
     pour.require("ninja")
+    pour.require("mingw64-8.1.0")
     pour.chdir(bindir)
     pour.run('cmake-3.5.2',
             '-G', 'Ninja',
@@ -37,6 +39,8 @@ function mingw64_810_generate(srcdir, bindir, buildtype)
 end
 
 function mingw64_810(srcdir, bindir, buildtype, exe)
+    pour.require("ninja")
+    pour.require("mingw64-8.1.0")
     pour.chdir(bindir)
     if not pour.file_exists(exe) then
         mingw64_810_generate(srcdir, bindir, buildtype)
@@ -51,22 +55,20 @@ if WINDOWS then
 function clang_400_generate(srcdir, bindir, buildtype, extra)
     local e = { table.unpack(extra or {}) }
     e[#e + 1] = srcdir
-    pour.require("clang-4.0.0")
     pour.require("ninja")
+    pour.require("clang-4.0.0")
     pour.chdir(bindir)
     pour.run('cmake-3.31.4',
             '-G', 'Ninja',
+            '-DCMAKE_TOOLCHAIN_FILE='..PACKAGE_DIR['clang-4.0.0']..'/toolchain.cmake',
             '-DCMAKE_BUILD_TYPE='..buildtype,
-            '-DCMAKE_SYSTEM_NAME=Windows-GNU',
-            '-DCMAKE_C_COMPILER=clang',
-            '-DCMAKE_C_COMPILER_WORKS=TRUE',
-            '-DCMAKE_CXX_COMPILER=clang++',
-            '-DCMAKE_CXX_COMPILER_WORKS=TRUE',
             table.unpack(e)
         )
 end
 
 function clang_400(srcdir, bindir, buildtype, exe, extra)
+    pour.require("ninja")
+    pour.require("clang-4.0.0")
     pour.chdir(bindir)
     if not pour.file_exists(exe) then
         clang_400_generate(srcdir, bindir, buildtype, extra)
@@ -129,8 +131,8 @@ end
 if WINDOWS then
 
 function egcs_112_generate(srcdir, bindir, buildtype)
-    pour.require("egcs-1.1.2")
     pour.require("make")
+    pour.require("egcs-1.1.2")
     pour.chdir(bindir)
     pour.run('cmake-3.5.2',
             '-G', 'MinGW Makefiles',
@@ -141,6 +143,8 @@ function egcs_112_generate(srcdir, bindir, buildtype)
 end
 
 function egcs_112(srcdir, bindir, buildtype, exe)
+    pour.require("make")
+    pour.require("egcs-1.1.2")
     pour.chdir(bindir)
     if not pour.file_exists(exe) then
         egcs_112_generate(srcdir, bindir, buildtype)
