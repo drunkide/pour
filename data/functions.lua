@@ -38,12 +38,13 @@ function mingw64_810(srcdir, bindir, buildtype, exe)
 end
 
 function msvc2022_32_generate(srcdir, bindir, extra)
+    local e = { table.unpack(extra or {}) }
+    e[#e + 1] = srcdir
     pour.chdir(bindir)
     pour.run('cmake-3.31.4',
             '-A', 'Win32',
             '-G', 'Visual Studio 17 2022',
-            table.unpack(extra or {}),
-            srcdir
+            table.unpack(e)
         )
 end
 
@@ -58,12 +59,13 @@ function msvc2022_32(srcdir, bindir, sln, configs, extra)
 end
 
 function msvc2022_64_generate(srcdir, bindir, extra)
+    local e = { table.unpack(extra or {}) }
+    e[#e + 1] = srcdir
     pour.chdir(bindir)
     pour.run('cmake-3.31.4',
             '-A', 'x64',
             '-G', 'Visual Studio 17 2022',
-            table.unpack(extra or {}),
-            srcdir
+            table.unpack(e)
         )
 end
 
