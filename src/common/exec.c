@@ -23,6 +23,7 @@ static DWORD g_dwChildProcessId;
 #endif
 
 static bool g_initialized;
+bool g_dont_print_commands;
 
 #ifdef _WIN32
 static BOOL WINAPI Exec_CtrlHandler(DWORD ctrl)
@@ -139,7 +140,8 @@ bool Exec_CommandV(const char* command, const char* const* argv, int argc, const
     lua_concat(L, lua_gettop(L) - start);
     const char* cmd = lua_tostring(L, -1);
 
-    Con_PrintF(COLOR_COMMAND, "# %s\n", cmd);
+    if (!g_dont_print_commands)
+        Con_PrintF(COLOR_COMMAND, "# %s\n", cmd);
 
   #ifdef _WIN32
 

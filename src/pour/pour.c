@@ -318,35 +318,37 @@ STRUCT(PackageName) {
 bool Pour_Main(int argc, char** argv)
 {
     const char* chdir = NULL;
-    int n = 1;
+    int n;
 
     Env_Set("POUR_EXECUTABLE", argv[0]);
 
-    if (argc > n && !strcmp(argv[n], "--chdir")) {
-        if (argc < n + 2) {
-            Con_PrintF(COLOR_ERROR, "ERROR: missing directory name after '%s'.\n", argv[n]);
-            return false;
-        }
-        chdir = argv[++n];
-        ++n;
-    }
-
-    if (argc > n && !strcmp(argv[n], "--run")) {
-        if (argc < n + 2) {
-            Con_PrintF(COLOR_ERROR, "ERROR: missing package name after '%s'.\n", argv[n]);
-            return false;
-        }
-        ++n;
-        return Pour_Run(argv[n], chdir, argc - n, argv + n);
-    }
-
-    if (argc > n && !strcmp(argv[n], "--script")) {
-        if (argc < n + 2) {
-            Con_PrintF(COLOR_ERROR, "ERROR: missing script name after '%s'.\n", argv[n]);
-            return false;
-        }
-        ++n;
-        return Pour_ExecScript(argv[n], chdir, argc - n, argv + n);
+    for (n = 1; n < argc; n++) {
+        if (!strcmp(argv[n], "--dont-print-commands"))
+            g_dont_print_commands = true;
+        else if (!strcmp(argv[n], "--chdir")) {
+            if (n + 1 >= argc) {
+                Con_PrintF(COLOR_ERROR, "ERROR: missing directory name after '%s'.\n", argv[n]);
+                return false;
+            }
+            chdir = argv[++n];
+        } else if (!strcmp(argv[n], "--run")) {
+            if (n + 1 >= argc) {
+                Con_PrintF(COLOR_ERROR, "ERROR: missing package name after '%s'.\n", argv[n]);
+                return false;
+            }
+            ++n;
+            return Pour_Run(argv[n], chdir, argc - n, argv + n);
+        } else if (!strcmp(argv[n], "--script")) {
+            if (n + 1 >= argc) {
+                Con_PrintF(COLOR_ERROR, "ERROR: missing script name after '%s'.\n", argv[n]);
+                return false;
+            }
+            ++n;
+            return Pour_ExecScript(argv[n], chdir, argc - n, argv + n);
+        } else if (!strcmp(argv[n], "-h") || !strcmp(argv[n], "--help"))
+            goto help;
+        else
+            break;
     }
 
     if (chdir)
@@ -369,6 +371,7 @@ bool Pour_Main(int argc, char** argv)
         }
 
         if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
+          help:
             Con_PrintF(COLOR_DEFAULT, "usage: pour [options] package...\n");
             Con_PrintF(COLOR_DEFAULT, "    or pour --run package [options]\n");
             return false;

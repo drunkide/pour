@@ -3,6 +3,8 @@
 
 #include <common/common.h>
 
+extern bool g_dont_print_commands;
+
 void Exec_Init(void);
 void Exec_Terminate(void);
 
