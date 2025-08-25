@@ -12,6 +12,7 @@
 #include <malloc.h>
 
 #define DEFAULT_EXECUTABLE_ID "_default_"
+char PACKAGE_DIR;
 
 /********************************************************************************************************************/
 
@@ -84,6 +85,11 @@ static bool loadPackageConfig(Package* pkg, const char* package)
         Con_PrintF(COLOR_ERROR, "ERROR: package '%s' is not available for current environment.\n", package);
         return false;
     }
+
+    lua_rawgetp(L, LUA_REGISTRYINDEX, &PACKAGE_DIR);
+    lua_pushstring(L, pkg->TARGET_DIR);
+    lua_setfield(L, -2, package);
+    lua_pop(L, 1);
 
     getGlobal(pkg, "EXTRA_PATH");
     if (lua_isnoneornil(L, -1))

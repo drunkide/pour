@@ -109,6 +109,11 @@ static int luaopen_pour(lua_State* L)
 
 void Pour_InitLua(lua_State* L)
 {
+    lua_newtable(L);
+    lua_pushvalue(L, -1);
+    lua_rawsetp(L, LUA_REGISTRYINDEX, &PACKAGE_DIR);
+    lua_setglobal(L, "PACKAGE_DIR");
+
     luaL_requiref(L, "pour", luaopen_pour, 1);
     lua_pop(L, 1);
 }
