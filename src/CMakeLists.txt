@@ -1,8 +1,20 @@
 
+set(functions_lua "${CMAKE_CURRENT_SOURCE_DIR}/../data/functions.lua")
+
+set(src_data
+    "${functions_lua}"
+    )
+
 set(src_data_packages
-    ../data/packages/cmake-3.31.4.lua
+    ../data/packages/clang-4.0.0.lua
     ../data/packages/cmake-3.5.2.lua
+    ../data/packages/cmake-3.31.4.lua
+    ../data/packages/egcs-1.1.2.lua
+    ../data/packages/foreign-linux.lua
     ../data/packages/mingw32-4.4.0.lua
+    ../data/packages/mingw32-8.1.0.lua
+    ../data/packages/mingw64-8.1.0.lua
+    ../data/packages/ninja.lua
     )
 
 set(src
@@ -28,6 +40,7 @@ set(src
     _main.c
     )
 
+source_group("Data Files" FILES ${src_data})
 source_group("Data Files\\packages" FILES ${src_data_packages})
 
 set(src_all)
@@ -39,7 +52,22 @@ foreach(file ${src})
     source_group("${group}" FILES "${abs}")
 endforeach()
 
-include_directories("${CMAKE_CURRENT_SOURCE_DIR}")
+set(functions_lua_h "${CMAKE_CURRENT_BINARY_DIR}/functions.lua.h")
+add_custom_command(OUTPUT
+        "${functions_lua_h}"
+    COMMAND
+        luac -c -o "${functions_lua_h}" "${functions_lua}"
+    DEPENDS
+        "${functions_lua}"
+        luac
+    WORKING_DIRECTORY
+        "${lua_BINARY_DIR}"
+    )
+
+source_group("Generated Files" FILES "${functions_lua_h}")
+list(APPEND src_all "${functions_lua_h}")
+
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}")
 add_definitions(-DPOUR_ROOT_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 
 if(NOT MSVC)
@@ -54,11 +82,6 @@ endif()
 
 add_executable(pour ${src_all})
 target_link_libraries(pour PRIVATE lua)
-
-if(WIN32)
-    set_target_properties(pour PROPERTIES
-        SUFFIX ".exe")
-endif()
 
 if(NOT MSVC)
     set_target_properties(pour PROPERTIES

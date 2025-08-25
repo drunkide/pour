@@ -31,6 +31,7 @@ static void PrintFunction(const Proto* f, int full);
 #define PROGNAME	"luac"		/* default program name */
 #define OUTPUT		PROGNAME ".out"	/* default output file */
 
+static int as_code=0;
 static int listing=0;			/* list bytecodes? */
 static int dumping=1;			/* dump bytecodes? */
 static int stripping=0;			/* strip debug information? */
@@ -60,6 +61,7 @@ static void usage(const char* message)
  fprintf(stderr,
   "usage: %s [options] [filenames]\n"
   "Available options are:\n"
+  "  -c       output as C source\n"
   "  -l       list (use -l -l for full listing)\n"
   "  -o name  output to file 'name' (default is \"%s\")\n"
   "  -p       parse only\n"
@@ -90,6 +92,8 @@ static int doargs(int argc, char* argv[])
   }
   else if (IS("-"))			/* end of options; use stdin */
    break;
+  else if (IS("-c"))			/* output as code */
+   ++as_code;
   else if (IS("-l"))			/* list */
    ++listing;
   else if (IS("-o"))			/* output file */
@@ -159,9 +163,22 @@ static const Proto* combine(lua_State* L, int n)
  }
 }
 
+static int n = 0;
+
 static int writer(lua_State* L, const void* p, size_t size, void* u)
 {
  UNUSED(L);
+ if (as_code) {
+    const unsigned char* pp = (const unsigned char*)p;
+    while (size-- != 0) {
+      if (n == 0)
+        fprintf((FILE*)u, "\n");
+      fprintf((FILE*)u, "0x%02X,", *pp++);
+      if (++n == 20)
+        n = 0;
+    }
+    return 0;
+ }
  return (fwrite(p,size,1,(FILE*)u)!=1) && (size!=0);
 }
 
@@ -169,13 +186,14 @@ static int pmain(lua_State* L)
 {
  int argc=(int)lua_tointeger(L,1);
  char** argv=(char**)lua_touserdata(L,2);
+ const char* filename;
  const Proto* f;
  int i;
  tmname=G(L)->tmname;
  if (!lua_checkstack(L,argc)) fatal("too many input files");
  for (i=0; i<argc; i++)
  {
-  const char* filename=IS("-") ? NULL : argv[i];
+  filename=IS("-") ? NULL : argv[i];
   if (luaL_loadfile(L,filename)!=LUA_OK) fatal(lua_tostring(L,-1));
  }
  f=combine(L,argc);
@@ -185,7 +203,22 @@ static int pmain(lua_State* L)
   FILE* D= (output==NULL) ? stdout : fopen(output,"wb");
   if (D==NULL) cannot("open");
   lua_lock(L);
+  if (as_code) {
+    char buf[256], *p;
+    char* str = strrchr(filename, '/');
+    char* str2 = strrchr(filename, '\\');
+    if (str2 && (!str || str2 > str))
+        str = str2;
+    strcpy(buf, (str ? str + 1 : filename));
+    for (p = buf; *p; ++p) {
+        if (*p == '.')
+            *p = '_';
+    }
+    fprintf(D, "static const unsigned char %s[] = {", buf);
+  }
   luaU_dump(L,f,writer,D,stripping);
+  if (as_code)
+    fprintf(D, "\n};\n");
   lua_unlock(L);
   if (ferror(D)) cannot("write");
   if (fclose(D)) cannot("close");

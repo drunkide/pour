@@ -1,3 +1,4 @@
+project(lua)
 
 set(src
     lapi.c
@@ -66,3 +67,7 @@ source_group("Source Files" FILES ${src} luac.c)
 add_library(lua STATIC ${src})
 target_include_directories(lua PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 set_target_properties(lua PROPERTIES FOLDER "Libs")
+
+add_executable(luac luac.c)
+target_link_libraries(luac PRIVATE lua)
+set_target_properties(luac PROPERTIES FOLDER "Tools")

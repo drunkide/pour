@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <signal.h>
 #include <malloc.h>
+#include "functions.lua.h"
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -142,6 +143,10 @@ static int pmain(lua_State *L)
 
     luaL_openlibs(L);
     Pour_InitLua(L);
+
+    int status = luaL_loadbuffer(L, (const char*)functions_lua, sizeof(functions_lua), "@functions.lua");
+    if (report(L, status) != 0)
+        return 0;
 
     lua_gc(L, LUA_GCRESTART);  /* start GC... */
     lua_gc(L, LUA_GCGEN, 0, 0);  /* ...in generational mode */
