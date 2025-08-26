@@ -287,7 +287,7 @@ dir* fat_create_directory(dir* parent, const char* name)
 
 static uint16_t alloc_cluster(uint16_t start)
 {
-    for (size_t i = start; i < FAT_SIZE; i++) {
+    for (size_t i = start; i < (size_t)FAT_SIZE; i++) {
         if (fat[i] == 0)
             return (uint16_t)i;
     }

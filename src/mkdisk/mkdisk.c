@@ -351,7 +351,7 @@ static void scan_dir(lua_State* L,
                 if (recursive == RECURSIVE_FLAT || recursive == RECURSIVE_FLAT_SKIP_CMAKE)
                     subdir = d;
                 else {
-                    char metafile[1024];
+                    char metafile[1032];
                     sprintf(metafile, "%s/[meta]", buf);
 
                     ext2_meta meta;

@@ -19,7 +19,7 @@ endif()
 
 add_definitions(-DLUA_USE_APICHECK)
 
-if(MSVC OR (CLANG AND WIN32))
+if(MSVC)
     include_directories("${CMAKE_CURRENT_SOURCE_DIR}/lib/dirent")
 endif()
 if(CLANG AND WIN32)
