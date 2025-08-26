@@ -52,6 +52,35 @@ end
 ----------------------------------------------------------------------------------------------------------------------
 if WINDOWS then
 
+function clang_350_linux64_generate(srcdir, bindir, buildtype, extra)
+    local e = { table.unpack(extra or {}) }
+    e[#e + 1] = srcdir
+    pour.require("ninja")
+    pour.require("clang-3.5.0-linux64")
+    pour.chdir(bindir)
+    pour.run('cmake-3.31.4',
+            '-G', 'Ninja',
+            '-DCMAKE_TOOLCHAIN_FILE='..PACKAGE_DIR['clang-3.5.0-linux64']..'/toolchain.cmake',
+            '-DCMAKE_MAKE_PROGRAM='..PACKAGE_DIR['ninja']..'/ninja.exe',
+            '-DCMAKE_BUILD_TYPE='..buildtype,
+            table.unpack(e)
+        )
+end
+
+function clang_350_linux64(srcdir, bindir, buildtype, exe, extra)
+    pour.require("ninja")
+    pour.require("clang-3.5.0-linux64")
+    pour.chdir(bindir)
+    if not pour.file_exists(exe) then
+        clang_350_linux64_generate(srcdir, bindir, buildtype, extra)
+    end
+    pour.run('cmake-3.31.4', '--build', '.')
+end
+
+end
+----------------------------------------------------------------------------------------------------------------------
+if WINDOWS then
+
 function clang_400_win32_generate(srcdir, bindir, buildtype, extra)
     local e = { table.unpack(extra or {}) }
     e[#e + 1] = srcdir
