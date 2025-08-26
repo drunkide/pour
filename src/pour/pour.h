@@ -5,7 +5,7 @@
 
 extern char PACKAGE_DIR;
 
-bool Pour_Run(const char* package, const char* chdir, int argc, char** argv);
+bool Pour_Run(const char* package, const char* chdir, int argc, char** argv, bool wait);
 bool Pour_Install(const char* package);
 
 bool Pour_Main(int argc, char** argv);

@@ -55,6 +55,7 @@ void Con_PrintV(ConColor color, const char* fmt, va_list args)
     switch (color) {
         case COLOR_DEFAULT: default: wAttr = g_defaultColor; break;
         case COLOR_COMMAND: wAttr = (FOREGROUND_GREEN | FOREGROUND_BLUE); break;
+        case COLOR_SUCCESS: wAttr = (FOREGROUND_GREEN | FOREGROUND_INTENSITY); break;
         case COLOR_WARNING: wAttr = (FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY); break;
         case COLOR_ERROR: wAttr = (FOREGROUND_RED | FOREGROUND_INTENSITY); break;
     }

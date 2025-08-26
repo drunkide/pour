@@ -111,10 +111,10 @@ static void pushArgument(lua_State* L, const char* argument)
 
 bool Exec_Command(const char* const* argv, int argc, const char* chdir)
 {
-    return Exec_CommandV(argv[0], argv, argc, chdir);
+    return Exec_CommandV(argv[0], argv, argc, chdir, true);
 }
 
-bool Exec_CommandV(const char* command, const char* const* argv, int argc, const char* chdir)
+bool Exec_CommandV(const char* command, const char* const* argv, int argc, const char* chdir, bool wait)
 {
     lua_State* L = gL;
     luaL_checkstack(L, 100, NULL);
@@ -165,6 +165,13 @@ bool Exec_CommandV(const char* command, const char* const* argv, int argc, const
         Con_PrintF(COLOR_ERROR, "ERROR: CreateProcess failed (code 0x%p).\n", (void*)(size_t)GetLastError());
         lua_settop(L, start);
         return false;
+    }
+
+    if (!wait) {
+        lua_settop(L, start);
+        CloseHandle(pi.hThread);
+        CloseHandle(pi.hProcess);
+        return true;
     }
 
     AssignProcessToJobObject(g_hChildJob, pi.hProcess);

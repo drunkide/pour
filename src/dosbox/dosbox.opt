@@ -1,0 +1,117 @@
+
+DOSBOX_OPTION(
+    title,
+    "DOSBox"
+    )
+
+DOSBOX_OPTION(
+    window_resolution,
+    "1024x768"
+    )
+
+DOSBOX_OPTION(
+    mem_size,
+    "256"
+    )
+
+DOSBOX_OPTION(
+    machine,
+    NULL
+    )
+
+DOSBOX_OPTION(
+    video_mem_size,
+    NULL
+    )
+
+DOSBOX_OPTION(
+    mouse_emulation,
+    NULL
+    )
+
+DOSBOX_OPTION(
+    mouse_wheel_key,
+    NULL
+    )
+
+DOSBOX_OPTION(
+    integration_device,
+    NULL
+    )
+
+DOSBOX_OPTION(
+    cpu_core,
+    "normal"
+    )
+
+DOSBOX_OPTION(
+    cpu_cycles,
+    "40000"
+    )
+
+DOSBOX_OPTION(
+    isa_pnp_bios,
+    NULL
+    )
+
+DOSBOX_OPTION(
+    isa_pnp_port,
+    NULL
+    )
+
+DOSBOX_OPTION(
+    bios_ps2,
+    NULL
+    )
+
+DOSBOX_OPTION(
+    unmask_keyboard_on_int16_read,
+    NULL
+    )
+
+DOSBOX_OPTION(
+    keyboard_aux,
+    NULL
+    )
+
+DOSBOX_OPTION(
+    keyboard_controller,
+    NULL
+    )
+
+DOSBOX_OPTION(
+    fdc_enable,
+    "false"
+    )
+
+DOSBOX_OPTION(
+    int13_fake_v86_io,
+    "false"
+    )
+
+DOSBOX_OPTION(
+    sblaster_type,
+    "sb16"
+    )
+
+DOSBOX_OPTION(
+    xms,
+    "false"
+    )
+
+DOSBOX_OPTION(
+    ems,
+    "false"
+    )
+
+DOSBOX_OPTION(
+    umb,
+    "false"
+    )
+
+DOSBOX_OPTION(
+    serial1,
+    "disabled"
+    )
+
+#undef DOSBOX_OPTION

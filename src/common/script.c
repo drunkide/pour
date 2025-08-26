@@ -4,6 +4,7 @@
 #include <common/utf8.h>
 #include <common/exec.h>
 #include <common/file.h>
+#include <dosbox/dosbox.h>
 #include <pour/pour_lua.h>
 #include <lualib.h>
 #include <stdio.h>
@@ -143,6 +144,7 @@ static int pmain(lua_State *L)
 
     luaL_openlibs(L);
     Pour_InitLua(L);
+    DOSBox_InitLua(L);
 
     int status = luaL_loadbuffer(L, (const char*)functions_lua, sizeof(functions_lua), "@functions.lua");
     if (report(L, status) != 0)

@@ -33,6 +33,9 @@ set(src
     common/script.h
     common/utf8.c
     common/utf8.h
+    dosbox/dosbox.c
+    dosbox/dosbox.h
+    dosbox/dosbox.opt
     pour/pour.c
     pour/pour.h
     pour/pour_lua.c
