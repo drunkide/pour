@@ -18,6 +18,7 @@ set(src_data_packages
     )
 
 set(src
+    common/byteswap.h
     common/common.h
     common/console.c
     common/console.h
@@ -36,6 +37,28 @@ set(src
     dosbox/dosbox.c
     dosbox/dosbox.h
     dosbox/dosbox.opt
+    mkdisk/bootcode.c
+    mkdisk/bootcode.h
+    mkdisk/disk_config.c
+    mkdisk/disk_config.h
+    mkdisk/ext2.c
+    mkdisk/ext2.h
+    mkdisk/ext2_defs.h
+    mkdisk/fat.c
+    mkdisk/fat.h
+    mkdisk/fat_defs.h
+    mkdisk/mbr.c
+    mkdisk/mbr.h
+    mkdisk/mbr_defs.h
+    mkdisk/mkdisk.c
+    mkdisk/mkdisk.h
+    mkdisk/vhd.c
+    mkdisk/vhd.h
+    mkdisk/vhd_defs.h
+    mkdisk/write.c
+    mkdisk/write.h
+    patch/patch.c
+    patch/patch.h
     pour/pour.c
     pour/pour.h
     pour/pour_lua.c

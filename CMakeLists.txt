@@ -1,10 +1,6 @@
 cmake_minimum_required(VERSION 3.5...3.31)
 project(pour)
 
-if(WIN32)
-    set(CMAKE_EXECUTABLE_SUFFIX ".exe")
-endif()
-
 set_property(GLOBAL PROPERTY USE_FOLDERS TRUE)
 set_property(GLOBAL PROPERTY PREDEFINED_TARGETS_FOLDER "CMake")
 
@@ -18,6 +14,10 @@ if(NOT MSVC)
 endif()
 
 add_definitions(-DLUA_USE_APICHECK)
+
+if(MSVC)
+    include_directories("${CMAKE_CURRENT_SOURCE_DIR}/lib/dirent")
+endif()
 
 add_subdirectory(lib)
 add_subdirectory(src)
