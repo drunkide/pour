@@ -25,6 +25,7 @@ call "%~dp0tools\cmake-3.5.2.cmd" ^
     -DCMAKE_RANLIB="%POUR_PACKAGE_DIR%\win32-clang-4.0.0\bin\llvm-ranlib" ^
     -DCMAKE_C_FLAGS="-target i686-w64-mingw32" ^
     -DWIN32=TRUE ^
+    -DCLANG=TRUE ^
     "%~dp0" ^
     || exit /B 1
 

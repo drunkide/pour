@@ -5,6 +5,8 @@
 #include <common/exec.h>
 #include <common/file.h>
 #include <dosbox/dosbox.h>
+#include <mkdisk/mkdisk.h>
+#include <patch/patch.h>
 #include <pour/pour_lua.h>
 #include <lualib.h>
 #include <stdio.h>
@@ -144,6 +146,8 @@ static int pmain(lua_State *L)
 
     luaL_openlibs(L);
     Pour_InitLua(L);
+    MkDisk_InitLua(L);
+    Patch_InitLua(L);
     DOSBox_InitLua(L);
 
     int status = luaL_loadbuffer(L, (const char*)functions_lua, sizeof(functions_lua), "@functions.lua");

@@ -15,4 +15,6 @@ extern bool g_mbr_fat;
 
 lua_dir* get_directory(lua_State* L, int index);
 
+void MkDisk_InitLua(lua_State* L);
+
 #endif

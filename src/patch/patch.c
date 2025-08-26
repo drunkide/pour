@@ -108,12 +108,17 @@ static const luaL_Reg funcs[] = {
     { NULL, NULL }
 };
 
-// called from linit.c
-int luaopen_patch(lua_State* L)
+static int luaopen_patch(lua_State* L)
 {
     lua_newtable(L);
     lua_rawsetp(L, LUA_REGISTRYINDEX, &g_table);
 
     luaL_newlib(L, funcs);
     return 1;
+}
+
+void Patch_InitLua(lua_State* L)
+{
+    luaL_requiref(L, "patch", luaopen_patch, 1);
+    lua_pop(L, 1);
 }

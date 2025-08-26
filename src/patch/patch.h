@@ -19,4 +19,6 @@ STRUCT(PATCH) {
 PATCH* patch_find(lua_State* L, const char* fileName);
 void patch_apply(lua_State* L, const char* fileName, PATCH* patch, void** fileData, unsigned long long* fileSize);
 
+void Patch_InitLua(lua_State* L);
+
 #endif

@@ -1,6 +1,8 @@
 #include <common/common.h>
 #ifdef _WIN32
-#define _WIN32_WINNT 0x501
+#ifndef _WIN32_WINNT
+#define _WIN32_WINNT 0x502
+#endif
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #endif
@@ -634,8 +636,7 @@ static const luaL_Reg funcs[] = {
     { NULL, NULL }
 };
 
-// called from linit.c
-int luaopen_mkdisk(lua_State* L)
+static int luaopen_mkdisk(lua_State* L)
 {
     luaL_newmetatable(L, CLASS_DIRECTORY);
 
@@ -648,4 +649,10 @@ int luaopen_mkdisk(lua_State* L)
 
     luaL_newlib(L, funcs);
     return 1;
+}
+
+void MkDisk_InitLua(lua_State* L)
+{
+    luaL_requiref(L, "mkdisk", luaopen_mkdisk, 1);
+    lua_pop(L, 1);
 }
