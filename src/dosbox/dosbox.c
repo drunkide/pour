@@ -20,6 +20,27 @@ static const char* pinned_string(lua_State* L, int index)
     return str;
 }
 
+static const char* pinned_prepend_string(lua_State* L, const char* old, int index,
+    const char* prepend, const char* append)
+{
+    const char* str = luaL_checkstring(L, index);
+    int n = lua_gettop(L);
+
+    if (prepend)
+        lua_pushstring(L, prepend);
+    lua_pushvalue(L, index);
+    if (append)
+        lua_pushstring(L, append);
+    if (old)
+        lua_rawgetp(L, LUA_REGISTRYINDEX, old);
+
+    lua_concat(L, lua_gettop(L) - n);
+    str = lua_tostring(L, -1);
+    lua_rawsetp(L, LUA_REGISTRYINDEX, str); /* keep string in memory until Lua exits */
+
+    return str;
+}
+
 static const char* pinned_concat_string(lua_State* L, const char* old, int index,
     const char* prepend, const char* append)
 {
@@ -52,6 +73,12 @@ static const char* pinned_concat_string(lua_State* L, const char* old, int index
 static int dosbox_add_autoexec_bat(lua_State* L)
 {
     g_autoexecBat = pinned_concat_string(L, g_autoexecBat, 1, "@", "\n");
+    return 0;
+}
+
+static int dosbox_prepend_autoexec_bat(lua_State* L)
+{
+    g_autoexecBat = pinned_prepend_string(L, g_autoexecBat, 1, "@", "\n");
     return 0;
 }
 
@@ -264,6 +291,7 @@ static const luaL_Reg funcs[] = {
         { #NAME, dosbox_set_##NAME },
     #include "dosbox.opt"
     { "autoexec_bat", dosbox_add_autoexec_bat },
+    { "prepend_autoexec_bat", dosbox_prepend_autoexec_bat },
     { "config_sys", dosbox_add_config_sys },
     { "here_is_your_working_dir", dosbox_set_working_dir },
     { "run", dosbox_run },
