@@ -96,6 +96,64 @@ static int docall(lua_State* L, int narg, int nres)
     return status;
 }
 
+bool Script_DoFile(const char* name, const char* chdir, int globalsTableIdx)
+{
+    lua_State* L = gL;
+    int n = lua_gettop(L);
+
+    File_PushCurrentDirectory(L);
+    int curdir = lua_gettop(L);
+
+    char path[DIR_MAX];
+    strcpy(path, name);
+    Dir_MakeAbsolutePath(path);
+    Dir_FromNativeSeparators(path);
+    Dir_RemoveLastPath(path);
+
+    if (globalsTableIdx != 0)           /* new _ENV */
+        lua_pushvalue(L, globalsTableIdx);
+    else
+        lua_newtable(L);
+
+    lua_pushvalue(L, -1);
+    lua_setfield(L, -2, "_G");          /* _ENV._G = _ENV */
+    lua_pushstring(L, path);
+    lua_setfield(L, -2, "SCRIPT_DIR");  /* _ENV.SCRIPT_DIR = <path> */
+
+    lua_newtable(L);                    /* metatable for new _ENV */
+    lua_pushglobaltable(L);
+    lua_setfield(L, -2, "__index");
+    lua_pushboolean(L, 0);
+    lua_setfield(L, -2, "__metatable");
+    lua_setmetatable(L, -2);
+
+    int status = report(L, luaL_loadfile(L, name)); /* FIXME: utf-8 */
+    if (status != LUA_OK) {
+        lua_settop(L, n);
+        return false;
+    }
+
+    if (chdir && !File_SetCurrentDirectory(chdir)) {
+        luaL_error(L, "unable to change working directory to \"%s\".", chdir);
+        lua_settop(L, n);
+        return false;
+    }
+
+    lua_pushvalue(L, -2);               /* new _ENV */
+    lua_setupvalue(L, -2, 1);           /* set as upvalue #1 for the script */
+
+    status = report(L, docall(L, 0, 0));
+
+    const char* oldcwd = lua_tostring(L, curdir);
+    if (!File_SetCurrentDirectory(oldcwd))
+        luaL_error(L, "unable to restore working directory to \"%s\".", oldcwd);
+
+    lua_settop(L, n);
+    return status == LUA_OK;
+}
+
+/********************************************************************************************************************/
+
 STRUCT(MainParams) {
     PFNMainProc pfnMain;
     char** argv;
@@ -163,64 +221,6 @@ static int pmain(lua_State *L)
 
     lua_pushboolean(L, 1);  /* signal no errors */
     return 1;
-}
-
-/********************************************************************************************************************/
-
-bool Script_DoFile(const char* name, const char* chdir, int globalsTableIdx)
-{
-    lua_State* L = gL;
-    int n = lua_gettop(L);
-
-    File_PushCurrentDirectory(L);
-    int curdir = lua_gettop(L);
-
-    char path[DIR_MAX];
-    strcpy(path, name);
-    Dir_MakeAbsolutePath(path);
-    Dir_FromNativeSeparators(path);
-    Dir_RemoveLastPath(path);
-
-    if (globalsTableIdx != 0)           /* new _ENV */
-        lua_pushvalue(L, globalsTableIdx);
-    else
-        lua_newtable(L);
-
-    lua_pushvalue(L, -1);
-    lua_setfield(L, -2, "_G");          /* _ENV._G = _ENV */
-    lua_pushstring(L, path);
-    lua_setfield(L, -2, "SCRIPT_DIR");  /* _ENV.SCRIPT_DIR = <path> */
-
-    lua_newtable(L);                    /* metatable for new _ENV */
-    lua_pushglobaltable(L);
-    lua_setfield(L, -2, "__index");
-    lua_pushboolean(L, 0);
-    lua_setfield(L, -2, "__metatable");
-    lua_setmetatable(L, -2);
-
-    int status = report(L, luaL_loadfile(L, name)); /* FIXME: utf-8 */
-    if (status != LUA_OK) {
-        lua_settop(L, n);
-        return false;
-    }
-
-    if (chdir && !File_SetCurrentDirectory(chdir)) {
-        luaL_error(L, "unable to change working directory to \"%s\".", chdir);
-        lua_settop(L, n);
-        return false;
-    }
-
-    lua_pushvalue(L, -2);               /* new _ENV */
-    lua_setupvalue(L, -2, 1);           /* set as upvalue #1 for the script */
-
-    status = report(L, docall(L, 0, 0));
-
-    const char* oldcwd = lua_tostring(L, curdir);
-    if (!File_SetCurrentDirectory(oldcwd))
-        luaL_error(L, "unable to restore working directory to \"%s\".", oldcwd);
-
-    lua_settop(L, n);
-    return status == LUA_OK;
 }
 
 int Script_RunVM(int argc, char** argv, PFNMainProc pfnMain)
