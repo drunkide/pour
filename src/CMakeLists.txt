@@ -1,4 +1,18 @@
 
+if(NOT MSVC)
+    add_definitions(
+        -Wall
+        -Wextra
+        -Werror
+        -finput-charset=UTF-8
+        -fexec-charset=UTF-8
+        )
+endif()
+
+add_subdirectory(pour_wrapper)
+
+######################################################################################################################
+
 set(functions_lua "${CMAKE_CURRENT_SOURCE_DIR}/../data/functions.lua")
 
 set(src_data
@@ -96,16 +110,6 @@ list(APPEND src_all "${functions_lua_h}")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}")
 add_definitions(-DPOUR_ROOT_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 
-if(NOT MSVC)
-    add_definitions(
-        -Wall
-        -Wextra
-        -Werror
-        -finput-charset=UTF-8
-        -fexec-charset=UTF-8
-        )
-endif()
-
 add_executable(pour ${src_all})
 target_link_libraries(pour PRIVATE lua)
 
@@ -113,5 +117,3 @@ if(NOT MSVC)
     set_target_properties(pour PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
 endif()
-
-add_subdirectory(pour_wrapper)

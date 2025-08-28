@@ -6,10 +6,16 @@
 #include <sys/stat.h>
 #include <stdio.h>
 #include <malloc.h>
+#include <io.h>
+#include <limits.h>
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#endif
+
+#ifndef PATH_MAX
+#define PATH_MAX DIR_MAX
 #endif
 
 struct File
@@ -117,7 +123,7 @@ void File_SetCurrentDirectory(lua_State* L, const char* path)
 
   #else
 
-    if (setcwd(path) < 0)
+    if (chdir(path) < 0)
         luaL_error(L, "setcwd() failed: %s", strerror(errno));
 
   #endif
@@ -179,15 +185,15 @@ File* File_PushOpen(lua_State* L, const char* path, openmode_t mode)
 
   #else
 
-    const char* action, *mode;
+    const char* action, *modstr;
 
     switch (mode) {
         case FILE_OPEN_SEQUENTIAL_READ:
-            mode = "rb";
+            modstr = "rb";
             action = "open";
             break;
         case FILE_CREATE_OVERWRITE:
-            mode = "wb";
+            modstr = "wb";
             action = "create";
             break;
         default:
@@ -196,7 +202,7 @@ File* File_PushOpen(lua_State* L, const char* path, openmode_t mode)
             return NULL;
     }
 
-    file->handle = fopen(path, mode);
+    file->handle = fopen(path, modstr);
     if (!file->handle)
         luaL_error(L, "unable to %s file \"%s\": %s", action, file, strerror(errno));
 

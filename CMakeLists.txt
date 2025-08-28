@@ -8,6 +8,10 @@ endif()
 set_property(GLOBAL PROPERTY USE_FOLDERS TRUE)
 set_property(GLOBAL PROPERTY PREDEFINED_TARGETS_FOLDER "CMake")
 
+if(USE_POSIX_IO)
+    add_definitions(-DUSE_POSIX_IO)
+endif()
+
 set_directory_properties(PROPERTIES
     VS_STARTUP_PROJECT pour
     )
