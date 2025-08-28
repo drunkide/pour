@@ -14,7 +14,7 @@ static const char* pinned_string(lua_State* L, int index)
 {
     const char* str = luaL_checkstring(L, index);
     lua_pushvalue(L, index);
-    lua_rawsetp(L, LUA_REGISTRYINDEX, str); /* keep string in memory until Lua exits */
+    luaL_ref(L, LUA_REGISTRYINDEX);
     return str;
 }
 

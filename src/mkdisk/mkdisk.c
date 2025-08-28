@@ -249,7 +249,7 @@ static void add_file_content(lua_State* L, const lua_dir* dst_dir,
 {
     char fatShortName[13];
 
-    (void)L;
+    DONT_WARN_UNUSED(L);
 
     const char* fsName;
     if (g_use_ext2)
@@ -451,7 +451,7 @@ static int mkdisk_init(lua_State* L)
 
 static int mkdisk_enable_lfn(lua_State* L)
 {
-    (void)L;
+    DONT_WARN_UNUSED(L);
     fat_enable_lfn = true;
     return 0;
 }

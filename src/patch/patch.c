@@ -13,7 +13,7 @@ static const char* pinned_string(lua_State* L, int index, size_t* len)
 {
     const char* str = luaL_checklstring(L, index, len);
     lua_pushvalue(L, index);
-    lua_rawsetp(L, LUA_REGISTRYINDEX, str); /* keep string in memory until Lua exits */
+    luaL_ref(L, LUA_REGISTRYINDEX);
     return str;
 }
 
@@ -38,7 +38,8 @@ static int patch_add(lua_State* L)
         lua_setfield(L, -2, file);
     }
 
-    PATCH_ELEMENT* el = (PATCH_ELEMENT*)malloc(sizeof(PATCH_ELEMENT));
+    PATCH_ELEMENT* el = (PATCH_ELEMENT*)lua_newuserdatauv(L, sizeof(PATCH_ELEMENT), 0);
+    luaL_ref(L, LUA_REGISTRYINDEX);
     el->search = search;
     el->replacement = replacement;
     el->searchLen = searchLen;
@@ -76,7 +77,7 @@ void patch_apply(lua_State* L, const char* fileName, PATCH* patch, void** fileDa
     char* start = (char*)*fileData;
     char* end = start + *fileSize;
 
-    (void)L;
+    DONT_WARN_UNUSED(L);
 
     for (PATCH_ELEMENT* el = patch->elements; el; el = el->next) {
         ++total;
