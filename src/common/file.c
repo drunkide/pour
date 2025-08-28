@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <io.h>
 #include <limits.h>
+#include <errno.h>
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -43,6 +44,8 @@ bool File_Exists(lua_State* L, const char* path)
 
   #else
 
+    DONT_WARN_UNUSED(L);
+
     struct stat st;
     return stat(path, &st) == 0;
 
@@ -67,6 +70,8 @@ bool File_TryCreateDirectory(lua_State* L, const char* path)
     return result;
 
   #else
+
+    DONT_WARN_UNUSED(L);
 
     return mkdir(path) == 0;
 

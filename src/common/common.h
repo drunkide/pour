@@ -11,4 +11,7 @@
     typedef struct X X; \
     struct X
 
+#define DONT_WARN_UNUSED(X) \
+    ((void)(X))
+
 #endif

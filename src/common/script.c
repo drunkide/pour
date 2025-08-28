@@ -30,7 +30,7 @@ static volatile int g_inCall;
 */
 static void lstop(lua_State* L, lua_Debug* ar)
 {
-    (void)ar;  /* unused arg. */
+    DONT_WARN_UNUSED(ar);
     /*lua_sethook(L, NULL, 0, 0);*/  /* reset hook */
     luaL_error(L, "interrupted!");
 }

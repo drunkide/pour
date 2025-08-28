@@ -108,7 +108,7 @@ static bool loadPackageConfig(Package* pkg, const char* package)
             str = buf;
             lua_replace(L, -2);
           #else
-            (void)strLen;
+            DONT_WARN_UNUSED(strLen);
           #endif
 
             Env_PrependPath(L, str);
@@ -284,8 +284,8 @@ bool Pour_ExecScript(lua_State* L, const char* script, const char* chdir, int ar
 {
     int n = lua_gettop(L);
 
-    (void)argc;
-    (void)argv;
+    DONT_WARN_UNUSED(argc);
+    DONT_WARN_UNUSED(argv);
 
     if (!Script_DoFile(L, script, chdir, 0)) {
         lua_settop(L, n);
