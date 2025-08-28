@@ -376,6 +376,36 @@ void File_Close(File* file)
 
     HANDLE handle = file->handle;
     if (handle != INVALID_HANDLE_VALUE) {
+
+        if (file->isSparse) {
+            DWORD currentOffset = SetFilePointer(handle, 0, NULL, FILE_CURRENT);
+            if (currentOffset == INVALID_SET_FILE_POINTER) {
+                Con_PrintF(file->L, COLOR_WARNING, "WARNING: SetFilePointer() failed in file \"%s\" (code %p)",
+                    file->name, (void*)(size_t)GetLastError());
+                goto err;
+            }
+
+            DWORD hiPart = 0;
+            DWORD loPart = GetFileSize(file->handle, &hiPart);
+            if (loPart == INVALID_FILE_SIZE) {
+                DWORD dwError = GetLastError();
+                if (dwError != NO_ERROR) {
+                    Con_PrintF(file->L, COLOR_WARNING, "WARNING: GetFileSize() failed in file \"%s\" (code %p)",
+                        file->name, (void*)(size_t)dwError);
+                }
+                goto err;
+            }
+
+            if (currentOffset > loPart && hiPart == 0) {
+                if (!SetEndOfFile(handle)) {
+                    Con_PrintF(file->L, COLOR_WARNING, "WARNING: SetEndOfFile() failed in file \"%s\" (code %p)",
+                        file->name, (void*)(size_t)GetLastError());
+                    goto err;
+                }
+            }
+        }
+
+      err:
         CloseHandle(handle);
         file->handle = INVALID_HANDLE_VALUE;
     }
@@ -644,11 +674,6 @@ void File_Write(File* file, const void* buf, size_t size)
                     Con_PrintF(L, COLOR_WARNING, "WARNING: SetFilePointer() failed in file \"%s\" (code %p)",
                         file->name, (void*)(size_t)GetLastError());
                     goto fullwrite;
-                }
-
-                if (!SetEndOfFile(handle)) {
-                    Con_PrintF(L, COLOR_WARNING, "WARNING: SetEndOfFile() failed in file \"%s\" (code %p)",
-                        file->name, (void*)(size_t)GetLastError());
                 }
 
                 ptr += zeroCount;
