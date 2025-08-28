@@ -5,7 +5,6 @@
 #include <stdarg.h>
 
 #ifdef _MSC_VER
-#pragma intrinsic(memcpy)
 #pragma intrinsic(memset)
 #endif
 
@@ -33,6 +32,14 @@ static WORD default_color;
 static CRITICAL_SECTION critical_section;
 
 /********************************************************************************************************************/
+
+static void copybytes(void* dst, const void* src, size_t size)
+{
+    char* d = (char*)dst;
+    const char* s = (char*)src;
+    while (size--)
+        *d++ = *s++;
+}
 
 static TCHAR* mycpy(TCHAR* dst, const char* src)
 {
@@ -232,7 +239,7 @@ void entry(void)
         *mycpy(pSlash, "\\CMakeLists.txt") = 0;
         if (GetFileAttributes(path) == INVALID_FILE_ATTRIBUTES) {
             TCHAR* dst = mycpy(buf, "git clone https://github.com/thirdpartystuff/pour \"");
-            memcpy(dst, path, sizeof(TCHAR) * (size_t)(pSlash - path));
+            copybytes(dst, path, sizeof(TCHAR) * (size_t)(pSlash - path));
             dst[pSlash - path] = 0;
             exec(NULL, buf);
             print_before_pour = TRUE;
@@ -240,7 +247,7 @@ void entry(void)
 
         *mycpy(pSlash, POUR_EXE) = 0;
         if (GetFileAttributes(path) == INVALID_FILE_ATTRIBUTES) {
-            memcpy(buf, path, sizeof(TCHAR) * (size_t)(pSlash - path));
+            copybytes(buf, path, sizeof(TCHAR) * (size_t)(pSlash - path));
             *mycpy(&buf[pSlash - path], "\\build_mingw.cmd") = 0;
             exec(NULL, buf);
             print_before_pour = TRUE;
