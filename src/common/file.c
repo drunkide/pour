@@ -649,8 +649,10 @@ static int lua_isfileidentical(lua_State* L)
     File* file = File_PushOpen(L, path, FILE_OPEN_SEQUENTIAL_READ);
 
     size_t oldSize = File_GetSize(file);
-    if (newSize != oldSize)
+    if (newSize != oldSize) {
+        File_Close(file);
         return 0;
+    }
 
     char* oldData = (char*)lua_newuserdatauv(L, oldSize, 0);
     File_Read(file, oldData, oldSize);
