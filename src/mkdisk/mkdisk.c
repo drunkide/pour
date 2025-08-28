@@ -1,6 +1,7 @@
 #include <common/common.h>
 #include <common/file.h>
 #include <common/console.h>
+#include <common/dirs.h>
 #include <mkdisk/mkdisk.h>
 #include <mkdisk/vhd.h>
 #include <mkdisk/mbr.h>
@@ -16,7 +17,13 @@
 #define CLASS_DIRECTORY_TABLE "mkdisk.directory.table"
 #define CLASS_DISK "mkdisk.disk"
 
+STRUCT(DiskList) {
+    Disk* first;
+    Disk* last;
+};
+
 static char marker_DIR;
+static char marker_LIST;
 
 /********************************************************************************************************************/
 
@@ -478,11 +485,8 @@ static int mkdisk_add_file_content(lua_State* L)
     return 0;
 }
 
-static int mkdisk_write_vhd(lua_State* L)
+static void MkDisk_EnsureDiskBuilt(Disk* dsk)
 {
-    Disk* dsk = (Disk*)luaL_checkudata(L, 1, CLASS_DISK);
-    const char* vhd_name = luaL_checkstring(L, 2);
-
     if (!dsk->built) {
         switch (dsk->fs) {
             case FS_FAT: Fat_Write(dsk); break;
@@ -490,8 +494,34 @@ static int mkdisk_write_vhd(lua_State* L)
         }
         dsk->built = true;
     }
+}
 
+static void MkDisk_WriteDefault(Disk* dsk)
+{
+    MkDisk_EnsureDiskBuilt(dsk);
+
+    const char* ext = strrchr(dsk->outFile, '.');
+    if (ext && !strcmp(ext, ".vhd"))
+        VHD_Write(dsk, dsk->outFile);
+    else
+        VHD_WriteAsIMG(dsk, dsk->outFile, true);
+}
+
+static int mkdisk_write_default(lua_State* L)
+{
+    Disk* dsk = (Disk*)luaL_checkudata(L, 1, CLASS_DISK);
+    MkDisk_WriteDefault(dsk);
+    return 0;
+}
+
+static int mkdisk_write_vhd(lua_State* L)
+{
+    Disk* dsk = (Disk*)luaL_checkudata(L, 1, CLASS_DISK);
+    const char* vhd_name = luaL_checkstring(L, 2);
+
+    MkDisk_EnsureDiskBuilt(dsk);
     VHD_Write(dsk, vhd_name);
+
     return 0;
 }
 
@@ -509,15 +539,49 @@ static int mkdisk_write_img(lua_State* L)
     else
         return luaL_error(L, "invalid img write mode: %s", mode);
 
-    if (!dsk->built) {
-        switch (dsk->fs) {
-            case FS_FAT: Fat_Write(dsk); break;
-            case FS_EXT2: Ext2_Write(dsk); break;
-        }
-        dsk->built = true;
+    MkDisk_EnsureDiskBuilt(dsk);
+    VHD_WriteAsIMG(dsk, img_name, mbr);
+
+    return 0;
+}
+
+static void MkDisk_RemoveDiskFromList(Disk* dsk)
+{
+    lua_State* L = dsk->L;
+
+    lua_rawgetp(L, LUA_REGISTRYINDEX, &marker_LIST);
+    DiskList* list = (DiskList*)lua_touserdata(L, -1);
+
+    if (dsk->next)
+        dsk->next->prev = dsk->prev;
+    else {
+        assert(list->last == dsk);
+        list->last = dsk->prev;
     }
 
-    VHD_WriteAsIMG(dsk, img_name, mbr);
+    if (dsk->prev)
+        dsk->prev->next = dsk->next;
+    else {
+        assert(list->first == dsk);
+        list->first = dsk->next;
+    }
+
+    dsk->next = NULL;
+    dsk->prev = NULL;
+    dsk->inList = false;
+}
+
+static int mkdisk_destructor(lua_State* L)
+{
+    Disk* dsk = (Disk*)luaL_checkudata(L, 1, CLASS_DISK);
+    if (!dsk->inList)
+        return 0;
+
+    MkDisk_RemoveDiskFromList(dsk);
+
+    if (!dsk->built)
+        MkDisk_WriteDefault(dsk);
+
     return 0;
 }
 
@@ -529,24 +593,35 @@ static const luaL_Reg disk_funcs[] = {
     { "make_directory", mkdisk_make_directory },
     { "add_file", mkdisk_add_file },
     { "add_file_content", mkdisk_add_file_content },
+    { "write", mkdisk_write_default },
     { "write_vhd", mkdisk_write_vhd },
     { "write_img", mkdisk_write_img },
+    { "__gc", mkdisk_destructor },
     { NULL, NULL }
 };
 
 static int mkdisk_create(lua_State* L)
 {
-    const char* size = luaL_checkstring(L, 1);
-    const char* boot = luaL_checkstring(L, 2);
+    int nameIndex = 1;
+    luaL_checkstring(L, nameIndex);
+    const char* size = luaL_checkstring(L, 2);
+    const char* boot = luaL_checkstring(L, 3);
 
-    Disk* dsk = (Disk*)lua_newuserdatauv(L, sizeof(Disk), 1);
-    luaL_setmetatable(L, CLASS_DISK);
+    Disk* dsk = (Disk*)lua_newuserdatauv(L, sizeof(Disk), 2);
     int resultIdx = lua_gettop(L);
 
     dsk->L = L;
     dsk->mbrFAT = false;
     dsk->fatEnableLFN = false;
+    dsk->inList = false;
     dsk->built = false;
+
+    luaL_setmetatable(L, CLASS_DISK);
+
+    char fileName[DIR_MAX];
+    Script_GetString(L, nameIndex, fileName, sizeof(fileName), "disk file name is too long");
+    dsk->outFile = Dir_PushAbsolutePath(L, fileName);
+    lua_setiuservalue(L, resultIdx, 1);
 
     if (!strcmp(size, "3m"))
         dsk->config = &disk_3M;
@@ -588,7 +663,7 @@ static int mkdisk_create(lua_State* L)
 
     lua_newtable(L);
     lua_pushvalue(L, -1);
-    lua_setiuservalue(L, resultIdx, 1);
+    lua_setiuservalue(L, resultIdx, 2);
 
     FSDir* root = NULL;
     switch (dsk->fs) {
@@ -596,7 +671,29 @@ static int mkdisk_create(lua_State* L)
         case FS_EXT2: Ext2_Init(dsk, &root); break;
     }
     MkDisk_PushDirectory(dsk, root, lua_absindex(L, -1), "/", "/", "");
-    lua_pop(L, 1);
+
+    DiskList* list;
+    lua_rawgetp(L, LUA_REGISTRYINDEX, &marker_LIST);
+    if (!lua_isnoneornil(L, -1))
+        list = (DiskList*)lua_touserdata(L, -1);
+    else {
+        list = (DiskList*)lua_newuserdatauv(L, sizeof(DiskList), 0);
+        list->first = NULL;
+        list->last = NULL;
+        lua_rawsetp(L, LUA_REGISTRYINDEX, &marker_LIST);
+    }
+
+    lua_pop(L, 2);
+
+    dsk->inList = true;
+    dsk->next = NULL;
+    dsk->prev = list->last;
+
+    if (!list->first)
+        list->first = dsk;
+    else
+        list->last->next = dsk;
+    list->last = dsk;
 
     return 2;
 }
@@ -605,13 +702,6 @@ static int mkdisk_create(lua_State* L)
 
 static const luaL_Reg funcs[] = {
     { "create", mkdisk_create },
-    { "enable_lfn", mkdisk_enable_lfn },
-    { "add_directory", mkdisk_add_directory },
-    { "make_directory", mkdisk_make_directory },
-    { "add_file", mkdisk_add_file },
-    { "add_file_content", mkdisk_add_file_content },
-    { "write_vhd", mkdisk_write_vhd },
-    { "write_img", mkdisk_write_img },
     { NULL, NULL }
 };
 
@@ -653,4 +743,23 @@ void MkDisk_InitLua(lua_State* L)
 {
     luaL_requiref(L, "mkdisk", luaopen_mkdisk, 1);
     lua_pop(L, 1);
+}
+
+void MkDisk_WriteAllDisks(lua_State* L)
+{
+    DiskList* list;
+    lua_rawgetp(L, LUA_REGISTRYINDEX, &marker_LIST);
+    if (lua_isnoneornil(L, -1)) {
+        lua_pop(L, 1);
+        return;
+    }
+
+    list = (DiskList*)lua_touserdata(L, -1);
+    lua_pop(L, 1);
+
+    while (list->first) {
+        Disk* dsk = list->first;
+        MkDisk_RemoveDiskFromList(dsk);
+        MkDisk_WriteDefault(dsk);
+    }
 }

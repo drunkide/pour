@@ -23,6 +23,7 @@ STRUCT(Package) {
     const char* TARGET_DIR;
     const char* SOURCE_URL;
     const char* CHECK_FILE;
+    const char* INVOKE_LUA;
     const char* DEFAULT_EXECUTABLE;
     bool ADJUST_ARG;
 };
@@ -81,6 +82,7 @@ static bool loadPackageConfig(Package* pkg, const char* package)
     pkg->TARGET_DIR = getString(pkg, "TARGET_DIR");
     pkg->SOURCE_URL = getString(pkg, "SOURCE_URL");
     pkg->CHECK_FILE = getString(pkg, "CHECK_FILE");
+    pkg->INVOKE_LUA = getString(pkg, "INVOKE_LUA");
     pkg->DEFAULT_EXECUTABLE = getExecutable(pkg, DEFAULT_EXECUTABLE_ID);
     pkg->ADJUST_ARG = getBoolean(pkg, "ADJUST_ARG");
 
@@ -155,6 +157,9 @@ static bool ensurePackageInstalled(Package* pkg, const char* package)
 
     if (pkg->CHECK_FILE) {
         if (File_Exists(L, pkg->CHECK_FILE))
+            return ensurePackageConfigured(pkg, package);
+    } else if (pkg->INVOKE_LUA) {
+        if (File_Exists(L, pkg->INVOKE_LUA))
             return ensurePackageConfigured(pkg, package);
     } else if (pkg->DEFAULT_EXECUTABLE) {
         const char* exe = getExecutable(pkg, pkg->DEFAULT_EXECUTABLE);
@@ -283,6 +288,30 @@ bool Pour_Run(lua_State* L, const char* package, const char* chdir, int argc, ch
 
 /********************************************************************************************************************/
 
+bool Pour_Install(lua_State* L, const char* package)
+{
+    int n = lua_gettop(L);
+    Package pkg;
+
+    pkg.L = L;
+
+    lua_newtable(L);
+    pkg.globalsTable = lua_gettop(L);
+
+    if (!ensurePackageInstalled(&pkg, package)) {
+        lua_settop(L, n);
+        return false;
+    }
+
+    if (pkg.INVOKE_LUA)
+        Pour_InvokeScript(L, pkg.INVOKE_LUA);
+
+    lua_settop(L, n);
+    return true;
+}
+
+/********************************************************************************************************************/
+
 bool Pour_ExecScript(lua_State* L, const char* script, const char* chdir, int argc, char** argv)
 {
     int n = lua_gettop(L);
@@ -331,23 +360,25 @@ bool Pour_ExecScript(lua_State* L, const char* script, const char* chdir, int ar
 
 /********************************************************************************************************************/
 
-bool Pour_Install(lua_State* L, const char* package)
+void Pour_InvokeScript(lua_State* L, const char* script)
 {
     int n = lua_gettop(L);
-    Package pkg;
 
-    pkg.L = L;
+    size_t len = strlen(script) + 1;
+    char* dir = (char*)lua_newuserdata(L, len);
+    memcpy(dir, script, len);
+    if (!Dir_RemoveLastPath(dir))
+        dir = NULL;
 
     lua_newtable(L);
-    pkg.globalsTable = lua_gettop(L);
+    lua_rawgetp(L, LUA_REGISTRYINDEX, &ARG);
+    lua_setfield(L, -2, "arg");
+    int globalsTableIdx = lua_gettop(L);
 
-    if (!ensurePackageInstalled(&pkg, package)) {
-        lua_settop(L, n);
-        return false;
-    }
+    if (!Script_DoFile(L, script, dir, globalsTableIdx))
+        luaL_error(L, "execution of script \"%s\" failed.", script);
 
     lua_settop(L, n);
-    return true;
 }
 
 /********************************************************************************************************************/

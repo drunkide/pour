@@ -127,22 +127,26 @@ void Dir_EnsureTrailingPathSeparator(char* path)
     }
 }
 
+const char* Dir_PushAbsolutePath(lua_State* L, const char* path)
+{
+    if (Dir_IsAbsolutePath(path))
+        lua_pushstring(L, path);
+    else {
+        File_PushCurrentDirectory(L);
+        lua_pushliteral(L, DIR_SEPARATOR);
+        lua_pushstring(L, path);
+        lua_concat(L, 3);
+    }
+    return lua_tostring(L, -1);
+}
+
 void Dir_MakeAbsolutePath(lua_State* L, char* path, size_t pathMax)
 {
     if (Dir_IsAbsolutePath(path))
         return;
 
-    File_PushCurrentDirectory(L);
-    lua_pushliteral(L, DIR_SEPARATOR);
-    lua_pushstring(L, path);
-    lua_concat(L, 3);
-
-    size_t len;
-    const char* src = lua_tolstring(L, -1, &len);
-    if (len >= pathMax)
-        luaL_error(L, "path too long: %s", src);
-    memcpy(path, src, len + 1);
-
+    Dir_PushAbsolutePath(L, path);
+    Script_GetString(L, -1, path, pathMax, "path too long");
     lua_pop(L, 1);
 }
 

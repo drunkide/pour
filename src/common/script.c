@@ -21,7 +21,25 @@
 #endif
 
 lua_State* gL;
+static const char* g_currentScriptDir;
 static volatile int g_inCall;
+
+/********************************************************************************************************************/
+
+void Script_GetString(lua_State* L, int index, char* buf, size_t bufSize, const char* error)
+{
+    size_t len;
+    const char* src = lua_tolstring(L, index, &len);
+    if (len >= bufSize)
+        luaL_error(L, "%s: %s", error, src);
+    memcpy(buf, src, len + 1);
+}
+
+const char* Script_GetCurrentScriptDir(lua_State* L)
+{
+    DONT_WARN_UNUSED(L);
+    return g_currentScriptDir;
+}
 
 /********************************************************************************************************************/
 
@@ -175,7 +193,12 @@ bool Script_DoFile(lua_State* L, const char* name, const char* chdir, int global
     lua_pushvalue(L, envIndex);                 /* new _ENV */
     lua_setupvalue(L, -2, 1);                   /* set as upvalue #1 for the script */
 
-    status = report(L, docall(L, 0, 0));
+    const char* prevScriptDir = g_currentScriptDir;
+    g_currentScriptDir = path;
+    status = docall(L, 0, 0);
+    g_currentScriptDir = prevScriptDir;
+
+    report(L, status);
 
     const char* oldcwd = lua_tostring(L, curdir);
     File_SetCurrentDirectory(L, oldcwd);

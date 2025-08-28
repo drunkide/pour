@@ -73,16 +73,18 @@ static int pour_run(lua_State* L)
 
 static int pour_invoke(lua_State* L)
 {
-    const char* path = luaL_checkstring(L, 1);
+    const int pathIndex = 1;
+    const char* path = luaL_checkstring(L, pathIndex);
 
-    lua_newtable(L);
-    lua_rawgetp(L, LUA_REGISTRYINDEX, &ARG);
-    lua_setfield(L, -2, "arg");
-    int globalsTableIdx = lua_gettop(L);
+    if (!Dir_IsAbsolutePath(path)) {
+        lua_pushstring(L, Script_GetCurrentScriptDir(L));
+        lua_pushliteral(L, DIR_SEPARATOR);
+        lua_pushvalue(L, pathIndex);
+        lua_concat(L, 3);
+        path = lua_tostring(L, -1);
+    }
 
-    if (!Script_DoFile(L, path, NULL, globalsTableIdx))
-        return luaL_error(L, "execution of script \"%s\" failed.", path);
-
+    Pour_InvokeScript(L, path);
     return 0;
 }
 

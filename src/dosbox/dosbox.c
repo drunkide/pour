@@ -9,6 +9,7 @@
 
 static const char* g_configSys = NULL;
 static const char* g_autoexecBat = NULL;
+static char WORKING_DIR;
 
 static const char* pinned_string(lua_State* L, int index)
 {
@@ -227,8 +228,22 @@ static void dosbox_write_config(lua_State* L, const char* path)
         Con_PrintF(L, COLOR_SUCCESS, "DOSBox: config file unchanged.\n");
 }
 
+static int dosbox_set_working_dir(lua_State* L)
+{
+    File_PushCurrentDirectory(L);
+    lua_rawsetp(L, LUA_REGISTRYINDEX, &WORKING_DIR);
+    return 0;
+}
+
 static int dosbox_run(lua_State* L)
 {
+    lua_rawgetp(L, LUA_REGISTRYINDEX, &WORKING_DIR);
+    if (!lua_isnoneornil(L, -1))
+        File_SetCurrentDirectory(L, lua_tostring(L, -1));
+    lua_pop(L, 1);
+
+    MkDisk_WriteAllDisks(L);
+
     dosbox_write_config(L, ".dosbox.conf");
 
     const char* argv[4];
@@ -249,6 +264,7 @@ static const luaL_Reg funcs[] = {
     #include "dosbox.opt"
     { "autoexec_bat", dosbox_add_autoexec_bat },
     { "config_sys", dosbox_add_config_sys },
+    { "here_is_your_working_dir", dosbox_set_working_dir },
     { "run", dosbox_run },
     { NULL, NULL }
 };

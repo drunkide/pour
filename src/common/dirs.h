@@ -25,6 +25,7 @@ void Dir_RemoveTrailingPathSeparator(char* path);
 bool Dir_RemoveLastPath(char* path);
 void Dir_EnsureTrailingPathSeparator(char* path);
 
+const char* Dir_PushAbsolutePath(lua_State* L, const char* path);
 void Dir_MakeAbsolutePath(lua_State* L, char* path, size_t pathMax);
 
 void Dir_FromNativeSeparators(char* path);
