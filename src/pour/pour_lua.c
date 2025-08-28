@@ -71,6 +71,21 @@ static int pour_run(lua_State* L)
     return 0;
 }
 
+static int pour_invoke(lua_State* L)
+{
+    const char* path = luaL_checkstring(L, 1);
+
+    lua_newtable(L);
+    lua_rawgetp(L, LUA_REGISTRYINDEX, &ARG);
+    lua_setfield(L, -2, "arg");
+    int globalsTableIdx = lua_gettop(L);
+
+    if (!Script_DoFile(L, path, NULL, globalsTableIdx))
+        return luaL_error(L, "execution of script \"%s\" failed.", path);
+
+    return 0;
+}
+
 static int pour_shell_open(lua_State* L)
 {
     size_t fileLen;
@@ -106,6 +121,7 @@ static const luaL_Reg funcs[] = {
     { "file_exists", pour_file_exists },
     { "require", pour_require },
     { "run", pour_run },
+    { "invoke", pour_invoke },
     { "shell_open", pour_shell_open },
     { NULL, NULL }
 };
