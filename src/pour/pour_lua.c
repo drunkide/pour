@@ -30,10 +30,18 @@ static int pour_file_exists(lua_State* L)
     return 1;
 }
 
+static int pour_fetch(lua_State* L)
+{
+    const char* package = luaL_checkstring(L, 1);
+    if (!Pour_Install(L, package, true))
+        return luaL_error(L, "could not fetch required package '%s'.", package);
+    return 0;
+}
+
 static int pour_require(lua_State* L)
 {
     const char* package = luaL_checkstring(L, 1);
-    if (!Pour_Install(L, package))
+    if (!Pour_Install(L, package, false))
         return luaL_error(L, "could not install required package '%s'.", package);
     return 0;
 }
@@ -122,6 +130,7 @@ static int pour_shell_open(lua_State* L)
 static const luaL_Reg funcs[] = {
     { "chdir", pour_chdir },
     { "file_exists", pour_file_exists },
+    { "fetch", pour_fetch },
     { "require", pour_require },
     { "run", pour_run },
     { "invoke", pour_invoke },

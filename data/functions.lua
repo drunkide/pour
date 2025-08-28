@@ -109,6 +109,30 @@ end
 ----------------------------------------------------------------------------------------------------------------------
 if WINDOWS then
 
+function msvc41_generate(srcdir, bindir, buildtype)
+    pour.fetch("vm-windows95")
+    pour.chdir(bindir)
+    pour.run('cmake-3.5.2',
+            '-G', 'NMake Makefiles',
+            '-DOLD_MSVC=TRUE',
+            '-DCMAKE_BUILD_TYPE='..buildtype,
+            srcdir
+        )
+end
+
+function msvc41(srcdir, bindir, buildtype, exe)
+    pour.fetch("vm-windows95")
+    pour.chdir(bindir)
+    if not pour.file_exists(exe) then
+        msvc41_generate(srcdir, bindir, buildtype)
+    end
+    pour.run('cmake-3.5.2', '--build', '.')
+end
+
+end
+----------------------------------------------------------------------------------------------------------------------
+if WINDOWS then
+
 function msvc2022_32_generate(srcdir, bindir, extra)
     local e = { table.unpack(extra or {}) }
     e[#e + 1] = srcdir

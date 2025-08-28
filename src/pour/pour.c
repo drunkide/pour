@@ -121,6 +121,19 @@ static bool loadPackageConfig(Package* pkg, const char* package)
         }
     }
 
+    getGlobal(pkg, "EXTRA_VARS");
+    if (lua_isnoneornil(L, -1))
+        lua_pop(L, 1);
+    else {
+        lua_pushnil(L);
+        while (lua_next(L, -2) != 0) {
+            const char* name = lua_tostring(L, -2);
+            const char* value = lua_tostring(L, -1);
+            Env_Set(L, name, value);
+            lua_pop(L, 1);
+        }
+    }
+
     return true;
 }
 
@@ -288,7 +301,7 @@ bool Pour_Run(lua_State* L, const char* package, const char* chdir, int argc, ch
 
 /********************************************************************************************************************/
 
-bool Pour_Install(lua_State* L, const char* package)
+bool Pour_Install(lua_State* L, const char* package, bool skipInvoke)
 {
     int n = lua_gettop(L);
     Package pkg;
@@ -303,7 +316,7 @@ bool Pour_Install(lua_State* L, const char* package)
         return false;
     }
 
-    if (pkg.INVOKE_LUA)
+    if (!skipInvoke && pkg.INVOKE_LUA)
         Pour_InvokeScript(L, pkg.INVOKE_LUA);
 
     lua_settop(L, n);
@@ -460,7 +473,7 @@ bool Pour_Main(lua_State* L, int argc, char** argv)
     }
 
     for (PackageName* p = firstPackage; p; p = p->next) {
-        if (!Pour_Install(L, p->name))
+        if (!Pour_Install(L, p->name, true))
             return false;
     }
 
