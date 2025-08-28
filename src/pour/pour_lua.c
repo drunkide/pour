@@ -16,11 +16,10 @@ static int pour_chdir(lua_State* L)
 {
     const char* file = luaL_checkstring(L, 1);
 
-    if (!File_Exists(file))
-        File_CreateDirectory(file);
+    if (!File_Exists(L, file))
+        File_TryCreateDirectory(L, file);
 
-    if (!File_SetCurrentDirectory(file))
-        return luaL_error(L, "can't change directory to \"%s\".", file);
+    File_SetCurrentDirectory(L, file);
 
     return 1;
 }
@@ -28,7 +27,7 @@ static int pour_chdir(lua_State* L)
 static int pour_file_exists(lua_State* L)
 {
     const char* file = luaL_checkstring(L, 1);
-    lua_pushboolean(L, File_Exists(file));
+    lua_pushboolean(L, File_Exists(L, file));
     return 1;
 }
 

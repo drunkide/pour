@@ -1,4 +1,5 @@
 #include <common/console.h>
+#include <common/file.h>
 #include <pour/pour.h>
 #include <stdio.h>
 #include <string.h>
@@ -220,39 +221,10 @@ static void dosbox_write_config(lua_State* L, const char* path)
 
     size_t length;
     const char* data = lua_tolstring(L, -1, &length);
-
-    FILE* f = fopen(path, "rb"); /* FIXME: utf-8 */
-    if (f) {
-        fseek(f, 0, SEEK_END);
-        long oldSize = ftell(f);
-        fseek(f, 0, SEEK_SET);
-        if (!ferror(f) && (size_t)oldSize == length) {
-            char* buf = (char*)lua_newuserdatauv(L, length, 0);
-            size_t bytesRead = fread(buf, 1, length, f);
-            if (!ferror(f) && bytesRead == length && !memcmp(buf, data, length)) {
-                free(buf);
-                fclose(f);
-                Con_PrintF(COLOR_SUCCESS, "DOSBox: config file unchanged.\n");
-                return;
-            }
-            free(buf);
-        }
-        fclose(f);
-    }
-
-    f = fopen(path, "wb"); /* FIXME: utf-8 */
-    if (!f)
-        luaL_error(L, "can't create \"%s\": %s", path, strerror(errno));
-
-    size_t bytesWritten = fwrite(data, 1, length, f);
-    if (ferror(f) || bytesWritten != length) {
-        const char* str = strerror(errno);
-        luaL_error(L, "can't write \"%s\": %s", path, str);
-    }
-
-    fclose(f);
-
-    Con_PrintF(COLOR_WARNING, "DOSBox: wrote new config file.\n");
+    if (File_MaybeOverwrite(L, path, data, length))
+        Con_PrintF(COLOR_WARNING, "DOSBox: wrote new config file.\n");
+    else
+        Con_PrintF(COLOR_SUCCESS, "DOSBox: config file unchanged.\n");
 }
 
 static int dosbox_run(lua_State* L)

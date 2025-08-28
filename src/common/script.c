@@ -133,11 +133,8 @@ bool Script_DoFile(const char* name, const char* chdir, int globalsTableIdx)
         return false;
     }
 
-    if (chdir && !File_SetCurrentDirectory(chdir)) {
-        luaL_error(L, "unable to change working directory to \"%s\".", chdir);
-        lua_settop(L, n);
-        return false;
-    }
+    if (chdir)
+        File_SetCurrentDirectory(L, chdir);
 
     lua_pushvalue(L, -2);               /* new _ENV */
     lua_setupvalue(L, -2, 1);           /* set as upvalue #1 for the script */
@@ -145,8 +142,7 @@ bool Script_DoFile(const char* name, const char* chdir, int globalsTableIdx)
     status = report(L, docall(L, 0, 0));
 
     const char* oldcwd = lua_tostring(L, curdir);
-    if (!File_SetCurrentDirectory(oldcwd))
-        luaL_error(L, "unable to restore working directory to \"%s\".", oldcwd);
+    File_SetCurrentDirectory(L, oldcwd);
 
     lua_settop(L, n);
     return status == LUA_OK;

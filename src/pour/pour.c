@@ -67,7 +67,7 @@ static bool loadPackageConfig(Package* pkg, const char* package)
     strcpy(script, g_packagesDir);
     Dir_AppendPath(script, package);
     strcat(script, ".lua");
-    if (!File_Exists(script)) {
+    if (!File_Exists(L, script)) {
         Con_PrintF(COLOR_ERROR, "ERROR: unknown package '%s'.\n", package);
         return false;
     }
@@ -128,7 +128,7 @@ static bool ensurePackageConfigured(Package* pkg, const char* package)
 
     lua_pushfstring(L, "%s/.pour-configured", pkg->TARGET_DIR);
     const char* checkFile = lua_tostring(L, -1);
-    if (File_Exists(checkFile))
+    if (File_Exists(L, checkFile))
         return true;
 
     lua_newtable(L);
@@ -137,7 +137,7 @@ static bool ensurePackageConfigured(Package* pkg, const char* package)
         return false;
     }
 
-    File_Write(checkFile, "", 0);
+    File_Overwrite(L, checkFile, "", 0);
 
     return true;
 }
@@ -148,7 +148,7 @@ static bool ensurePackageInstalled(Package* pkg, const char* package)
         return false;
 
     if (pkg->CHECK_FILE) {
-        if (File_Exists(pkg->CHECK_FILE))
+        if (File_Exists(L, pkg->CHECK_FILE))
             return ensurePackageConfigured(pkg, package);
     } else if (pkg->DEFAULT_EXECUTABLE) {
         const char* exe = getExecutable(pkg, pkg->DEFAULT_EXECUTABLE);
@@ -158,7 +158,7 @@ static bool ensurePackageInstalled(Package* pkg, const char* package)
                 package, pkg->DEFAULT_EXECUTABLE);
             return false;
         }
-        if (File_Exists(exe))
+        if (File_Exists(L, exe))
             return ensurePackageConfigured(pkg, package);
     } else {
         Con_PrintF(COLOR_ERROR, "ERROR: missing CHECK_FILE for package '%s'.\n", package);
