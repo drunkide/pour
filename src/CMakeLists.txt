@@ -51,6 +51,8 @@ set(src
     dosbox/dosbox.c
     dosbox/dosbox.h
     dosbox/dosbox.opt
+    grp/grpfile.c
+    grp/grpfile.h
     mkdisk/bootcode.c
     mkdisk/bootcode.h
     mkdisk/disk_config.c

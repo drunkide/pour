@@ -1,16 +1,7 @@
-#include <stdint.h>
-#include <stdio.h>
+#include <common/common.h>
+#include <common/console.h>
+#include <mkdisk/mkdisk.h>
 #include <string.h>
-#include <errno.h>
-#include <stdbool.h>
-#include <stdlib.h>
-#include <lua.h>
-#include <lauxlib.h>
-#include "mkdisk.h"
-#include "fat.h"
-#include "ext2.h"
-#include "ext2_defs.h"
-#include "mkdisk.h"
 
 #pragma pack(push, 1)
 
@@ -99,14 +90,19 @@ typedef struct Item {
     uint16_t offset;
 } Item;
 
-static int g_groupFileCount;
-static GROUPHEADER g_header;
-static Item* g_firstItem;
-static Item* g_lastItem;
-static int g_width;
-static int g_height;
-static const char* g_title;
-static bool g_wasCreated;
+STRUCT(GrpFile) {
+    GrpFile* next;
+    GROUPHEADER header;
+    DiskDir* dir;
+    Item* firstItem;
+    Item* lastItem;
+    const char* fileName;
+    const char* title;
+    int width;
+    int height;
+    int ref;
+    bool written;
+};
 
 #define ICON_X 21
 #define ICON_Y 0
@@ -118,81 +114,130 @@ static bool g_wasCreated;
 
 #define ICON_MINIMIZED_Y 253
 
-const char grpfile_extra;
-static bool extra_executed;
+#define CLASS_GRPFILE "GrpFile*"
 
-void grpfile_exec_extra(lua_State* L)
-{
-    if (extra_executed)
-        return;
-    extra_executed = true;
+#define USERVAL_GROUP_TITLE 1
+#define USERVAL_GROUP_DIR 2
+#define USERVAL_GROUP_FILE_NAME 3
+#define USERVAL_GROUP_ITEM_TABLE 2
 
-    lua_rawgetp(L, LUA_REGISTRYINDEX, &grpfile_extra);
-    if (luaL_loadstring(L, lua_tostring(L, -1)) != 0)
-        luaL_error(L, "syntax error in expression: %s", lua_tostring(L, -1));
-    if (lua_pcall(L, 0, 0, 0))
-        luaL_error(L, "error evaluating expression: %s", lua_tostring(L, -1));
-}
+static GrpFile* g_groups;
+static int g_groupFileCount;
 
 static int grpfile_create(lua_State* L)
 {
-    const char* title = luaL_checkstring(L, 1);
+    const int titleIndex = 1;
+    const char* title = luaL_checkstring(L, titleIndex);
+    const int dirIndex = 2;
+    DiskDir* dir = MkDisk_GetDirectory(L, dirIndex);
+    const int fileNameIndex = 3;
+    const char* fileName = luaL_checkstring(L, fileNameIndex);
 
-    memcpy(g_header.cIdentifier, "PMCC", 4);
-    g_header.wCheckSum = 0;
-    g_header.nCmdShow = SW_SHOWNORMAL;
-    g_header.rcNormal.left = 100;
-    g_header.rcNormal.top = 100;
-    g_header.rcNormal.right = 200;
-    g_header.rcNormal.bottom = 200;
-    g_header.ptMin.x = ICON_X + g_groupFileCount++ * ICON_W;
-    g_header.ptMin.y = ICON_MINIMIZED_Y;
-    g_header.wLogPixelsX = 32;
-    g_header.wLogPixelsY = 32;
-    g_header.bPlanes = 1;
-    g_header.bBitsPerPixel = 1;
-    g_header.reserved = 0;
-    g_header.cItems = 0;
+    GrpFile* grp = (GrpFile*)lua_newuserdatauv(L, sizeof(GrpFile), 4);
+    luaL_setmetatable(L, CLASS_GRPFILE);
 
-    g_title = title;
-    lua_pushvalue(L, 1);
-    lua_rawsetp(L, LUA_REGISTRYINDEX, g_title);
+    lua_pushvalue(L, titleIndex);
+    lua_setiuservalue(L, -2, USERVAL_GROUP_TITLE);
+    lua_pushvalue(L, dirIndex);
+    lua_setiuservalue(L, -2, USERVAL_GROUP_DIR);
+    lua_pushvalue(L, fileNameIndex);
+    lua_setiuservalue(L, -2, USERVAL_GROUP_FILE_NAME);
+    lua_newtable(L);
 
-    g_width = 1;
-    g_height = 1;
-    g_firstItem = NULL;
-    g_lastItem = NULL;
+    lua_setiuservalue(L, -2, USERVAL_GROUP_ITEM_TABLE);
+
+    memcpy(grp->header.cIdentifier, "PMCC", 4);
+    grp->header.wCheckSum = 0;
+    grp->header.nCmdShow = SW_SHOWNORMAL;
+    grp->header.rcNormal.left = 100;
+    grp->header.rcNormal.top = 100;
+    grp->header.rcNormal.right = 200;
+    grp->header.rcNormal.bottom = 200;
+    grp->header.ptMin.x = ICON_X + g_groupFileCount++ * ICON_W;
+    grp->header.ptMin.y = ICON_MINIMIZED_Y;
+    grp->header.wLogPixelsX = 32;
+    grp->header.wLogPixelsY = 32;
+    grp->header.bPlanes = 1;
+    grp->header.bBitsPerPixel = 1;
+    grp->header.reserved = 0;
+    grp->header.cItems = 0;
+
+    grp->dir = dir;
+    grp->firstItem = NULL;
+    grp->lastItem = NULL;
+    grp->fileName = fileName;
+    grp->title = title;
+    grp->width = 1;
+    grp->height = 1;
+    grp->written = false;
+
+    lua_pushvalue(L, -1);
+    grp->ref = luaL_ref(L, LUA_REGISTRYINDEX);
+
+    grp->next = g_groups;
+    g_groups = grp;
 
     return 1;
 }
 
-static int grpfile_minimized(lua_State* L)
+static int grpfile_get(lua_State* L)
 {
-    g_header.nCmdShow = SW_SHOWMINIMIZED;
-    return 1;
+    const char* name = luaL_checkstring(L, 1);
+
+    for (GrpFile* grp = g_groups; grp; grp = grp->next) {
+        if (!strcmp(grp->title, name)) {
+            lua_rawgeti(L, LUA_REGISTRYINDEX, grp->ref);
+            return 1;
+        }
+    }
+
+    return luaL_error(L, "GRP file \"%s\" does not exist.", name);
 }
+
+static int grpfile_minimize(lua_State* L)
+{
+    GrpFile* grp = (GrpFile*)luaL_checkudata(L, 1, CLASS_GRPFILE);
+
+    if (grp->written)
+        return luaL_error(L, "GRP file already written.");
+
+    grp->header.nCmdShow = SW_SHOWMINIMIZED;
+    return 0;
+}
+
+#define USERVAL_ITEM_NAME 1
+#define USERVAL_ITEM_COMMAND 2
+#define USERVAL_ITEM_WORKING_DIR 3
+#define USERVAL_ITEM_ICON_PATH 4
 
 static int grpfile_add(lua_State* L)
 {
     size_t nameLength, commandLength, workingDirLength, iconPathLength;
 
-    int x = luaL_checkinteger(L, 1);
-    int y = luaL_checkinteger(L, 2);
-    const char* name = luaL_checklstring(L, 3, &nameLength);
-    const char* command = luaL_checklstring(L, 4, &commandLength);
-    const char* workingDir = luaL_optlstring(L, 5, NULL, &workingDirLength);
-    const char* iconPath = luaL_optlstring(L, 6, NULL, &iconPathLength);
+    const int grpIndex = 1;
+    GrpFile* grp = (GrpFile*)luaL_checkudata(L, grpIndex, CLASS_GRPFILE);
+    int x = luaL_checkinteger(L, 2);
+    int y = luaL_checkinteger(L, 3);
+    const int nameIndex = 4;
+    const char* name = luaL_checklstring(L, nameIndex, &nameLength);
+    int commandIndex = 5;
+    const char* command = luaL_checklstring(L, commandIndex, &commandLength);
+    int workingDirIndex = 6;
+    const char* workingDir = luaL_optlstring(L, workingDirIndex, NULL, &workingDirLength);
+    int iconPathIndex = 7;
+    const char* iconPath = luaL_optlstring(L, iconPathIndex, NULL, &iconPathLength);
+
+    if (grp->written)
+        return luaL_error(L, "GRP file already written.");
 
     if (!iconPath) {
         iconPath = command;
         iconPathLength = commandLength;
     }
 
-    int commandIndex = 4;
-    int workingDirIndex = 5;
     if (workingDir) {
-        // PROGMAN is stupid :facepalm:
-        // Put <WORKING_DIR>\<EXE> into COMMAND and then put <EXE_PATH> into a TAG :facepalm:
+        /* PROGMAN is stupid :facepalm:
+           Put <WORKING_DIR>\<EXE> into COMMAND and then put <EXE_PATH> into a TAG :facepalm: */
 
         const char* slash = strrchr(command, '\\');
         const char* origCommand = command;
@@ -211,15 +256,20 @@ static int grpfile_add(lua_State* L)
         workingDir = lua_tolstring(L, workingDirIndex, &workingDirLength);
     }
 
-    Item* item = (Item*)lua_newuserdata(L, sizeof(Item));
-    lua_rawsetp(L, LUA_REGISTRYINDEX, item);
+    Item* item = (Item*)lua_newuserdatauv(L, sizeof(Item), 4);
 
-    lua_pushvalue(L, 3); lua_rawsetp(L, LUA_REGISTRYINDEX, name);
-    lua_pushvalue(L, commandIndex); lua_rawsetp(L, LUA_REGISTRYINDEX, command);
-    if (workingDir)
-        lua_pushvalue(L, workingDirIndex), lua_rawsetp(L, LUA_REGISTRYINDEX, workingDir);
-    if (iconPath)
-        lua_pushvalue(L, 6), lua_rawsetp(L, LUA_REGISTRYINDEX, iconPath);
+    lua_pushvalue(L, nameIndex);
+    lua_setiuservalue(L, -2, USERVAL_ITEM_NAME);
+    lua_pushvalue(L, commandIndex);
+    lua_setiuservalue(L, -2, USERVAL_ITEM_COMMAND);
+    if (workingDir) {
+        lua_pushvalue(L, workingDirIndex);
+        lua_setiuservalue(L, -2, USERVAL_ITEM_WORKING_DIR);
+    }
+    if (iconPath) {
+        lua_pushvalue(L, iconPathIndex);
+        lua_setiuservalue(L, -2, USERVAL_ITEM_ICON_PATH);
+    }
 
     item->next = NULL;
     item->name = name;
@@ -246,111 +296,111 @@ static int grpfile_add(lua_State* L)
     memset(item->andPlane, 0, sizeof(item->andPlane));
     memset(item->xorPlane, 0, sizeof(item->xorPlane));
 
-    if (g_width < x + 1)
-        g_width = x + 1;
-    if (g_height < y + 1)
-        g_height = y + 1;
+    if (grp->width < x + 1)
+        grp->width = x + 1;
+    if (grp->height < y + 1)
+        grp->height = y + 1;
 
-    if (!g_firstItem)
-        g_firstItem = item;
+    if (!grp->firstItem)
+        grp->firstItem = item;
     else
-        g_lastItem->next = item;
-    g_lastItem = item;
+        grp->lastItem->next = item;
+    grp->lastItem = item;
 
-    ++g_header.cItems;
+    ++grp->header.cItems;
     return 0;
 }
 
-static luaL_Buffer buf;
-
-#define bytes(block) bytes_(&(block), sizeof(block))
-static void bytes_(const void* data, size_t size)
+#define bytes(buf, block) bytes_((buf), &(block), sizeof(block))
+static void bytes_(luaL_Buffer* buf, const void* data, size_t size)
 {
-    luaL_addlstring(&buf, (const char*)data, size);
+    luaL_addlstring(buf, (const char*)data, size);
 }
 
-static void u16(uint16_t value)
+static void u16(luaL_Buffer* buf, uint16_t value)
 {
-    luaL_addlstring(&buf, (const char*)&value, 2);
+    luaL_addlstring(buf, (const char*)&value, 2);
 }
 
-static void string(const char* str)
+static void string(luaL_Buffer* buf, const char* str)
 {
-    luaL_addlstring(&buf, str, strlen(str) + 1);
+    luaL_addlstring(buf, str, strlen(str) + 1);
 }
 
-static void tag(uint16_t wID, int16_t item, const char* str)
+static void tag(luaL_Buffer* buf, uint16_t wID, int16_t item, const char* str)
 {
     TAGDATA tag;
     tag.wID = wID;
     tag.wItem = item;
     tag.cb = (str ? strlen(str) + (!strcmp(str, "PMCC") ? 0 : 1) + sizeof(tag) : 0);
 
-    bytes(tag);
+    bytes(buf, tag);
     if (str)
-        luaL_addlstring(&buf, str, tag.cb - sizeof(tag));
+        luaL_addlstring(buf, str, tag.cb - sizeof(tag));
 }
 
 static int grpfile_write(lua_State* L)
 {
-    lua_dir* parent = get_directory(L, 1);
-    const char* name = luaL_checkstring(L, 2);
+    GrpFile* grp = (GrpFile*)luaL_checkudata(L, 1, CLASS_GRPFILE);
     uint16_t cbGroup, itemOffsets, pName;
 
-    g_header.rcNormal.right = g_header.rcNormal.left + ICON_X + ICON_W * g_width + WINDOW_RIGHT_PADDING;
-    g_header.rcNormal.bottom = g_header.rcNormal.top + ICON_Y + ICON_H * g_height + WINDOW_BOTTOM_PADDING;
+    grp->written = true;
 
-    if (g_header.cItems == 0)
-        g_header.cItems = 1;
+    grp->header.rcNormal.right = grp->header.rcNormal.left + ICON_X + ICON_W * grp->width + WINDOW_RIGHT_PADDING;
+    grp->header.rcNormal.bottom = grp->header.rcNormal.top + ICON_Y + ICON_H * grp->height + WINDOW_BOTTOM_PADDING;
 
+    if (grp->header.cItems == 0)
+        grp->header.cItems = 1;
+
+    luaL_Buffer buf;
     void* data;
     size_t dataSize;
     {
         luaL_buffinit(L, &buf);
 
-        // header
-        bytes(g_header);
+        /* header */
+        bytes(&buf, grp->header);
 
-        // item offsets
+        /* item offsets */
         itemOffsets = (uint16_t)buf.n;
-        for (size_t i = 0; i < g_header.cItems; i++)
-            u16(0); // patched later
+        for (size_t i = 0; i < grp->header.cItems; i++)
+            u16(&buf, 0); /* patched later */
 
-        // group name
+        /* group name */
         pName = (uint16_t)buf.n;
-        string(g_title);
+        string(&buf, grp->title);
 
-        // items
-        for (Item* p = g_firstItem; p; p = p->next) {
+        /* items */
+        for (Item* p = grp->firstItem; p; p = p->next) {
             p->offset = (uint16_t)buf.n;
-            bytes(p->header);
+            bytes(&buf, p->header);
             p->header.pName = (uint16_t)buf.n;
-            bytes_(p->name, p->nameLength);
+            bytes_(&buf, p->name, p->nameLength);
             p->header.pCommand = (uint16_t)buf.n;
-            bytes_(p->command, p->commandLength);
+            bytes_(&buf, p->command, p->commandLength);
             p->header.pIconPath = (uint16_t)buf.n;
-            bytes_(p->iconPath, p->iconPathLength);
+            bytes_(&buf, p->iconPath, p->iconPathLength);
         }
 
-        // icons
-        for (Item* p = g_firstItem; p; p = p->next) {
+        /* icons */
+        for (Item* p = grp->firstItem; p; p = p->next) {
             p->header.pHeader = (uint16_t)buf.n;
-            bytes(p->iconHeader);
+            bytes(&buf, p->iconHeader);
             p->header.pANDPlane = (uint16_t)buf.n;
-            bytes(p->andPlane);
+            bytes(&buf, p->andPlane);
             p->header.pXORPlane = (uint16_t)buf.n;
-            bytes(p->xorPlane);
+            bytes(&buf, p->xorPlane);
         }
 
-        // tags
+        /* tags */
         cbGroup = (uint16_t)buf.n;
-        tag(0x8000, -1, "PMCC");    // header
+        tag(&buf, 0x8000, -1, "PMCC");  /* header */
         int16_t index = 0;
-        for (Item* p = g_firstItem; p; p = p->next, ++index) {
+        for (Item* p = grp->firstItem; p; p = p->next, ++index) {
             if (p->workingDir)
-                tag(0x8101, index, p->workingDir);
+                tag(&buf, 0x8101, index, p->workingDir);
         }
-        tag(-1, -1, NULL);          // footer
+        tag(&buf, -1, -1, NULL);        /* footer */
 
         luaL_pushresult(&buf);
         data = (void*)luaL_tolstring(L, -1, &dataSize);
@@ -361,7 +411,7 @@ static int grpfile_write(lua_State* L)
     hdr->cbGroup = cbGroup;
 
     uint16_t* pOffsets = (uint16_t*)((char*)data + itemOffsets);
-    for (Item* p = g_firstItem; p; p = p->next) {
+    for (Item* p = grp->firstItem; p; p = p->next) {
         *pOffsets++ = p->offset;
         ITEMDATA* pHeader = (ITEMDATA*)((char*)data + p->offset);
         pHeader->pHeader = p->header.pHeader;
@@ -383,42 +433,58 @@ static int grpfile_write(lua_State* L)
     }
     hdr->wCheckSum = 0 - sum;
 
-    if (!g_use_ext2)
-        fat_add_file(parent->dir, name, data, dataSize);
-    else {
-        ext2_meta meta;
-        meta.type_and_perm = EXT2_TYPE_FILE | 0644;
-        meta.uid = 0;
-        meta.gid = 0;
-
-        ext2_add_file(parent->dir, name, data, dataSize, &meta);
-    }
-
-    printf("\n=> %s%s\n", parent->path, name);
-    g_wasCreated = true;
-
+    MkDisk_AddFileContent(grp->dir->disk, grp->dir, grp->fileName, data, dataSize);
     return 0;
 }
 
-static int grpfile_was_created(lua_State* L)
-{
-    grpfile_exec_extra(L);
-    lua_pushboolean(L, g_wasCreated);
-    return 1;
-}
-
-static const luaL_Reg funcs[] = {
-    { "create", grpfile_create },
-    { "minimized", grpfile_minimized },
+static const luaL_Reg grpfile_funcs[] = {
+    { "minimize", grpfile_minimize },
     { "add", grpfile_add },
     { "write", grpfile_write },
-    { "was_created", grpfile_was_created },
     { NULL, NULL }
 };
 
-// called from linit.c
+static const luaL_Reg funcs[] = {
+    { "create", grpfile_create },
+    { "get", grpfile_get },
+    { NULL, NULL }
+};
+
+static int grpfile_tostring(lua_State* L)
+{
+    const Disk* dsk = (Disk*)luaL_checkudata(L, 1, CLASS_GRPFILE);
+    DONT_WARN_UNUSED(dsk);
+    lua_pushstring(L, "<GrpFile*>");
+    return 1;
+}
+
 int luaopen_grpfile(lua_State* L)
 {
+    luaL_newmetatable(L, CLASS_GRPFILE);
+    lua_pushvalue(L, -1);
+    lua_setfield(L, -2, "__index");
+    lua_pushcfunction(L, grpfile_tostring);
+    lua_setfield(L, -2, "__tostring");
+    luaL_setfuncs(L, grpfile_funcs, 0);
+
     luaL_newlib(L, funcs);
     return 1;
+}
+
+void GrpFile_InitLua(lua_State* L)
+{
+    luaL_requiref(L, "wingrp", luaopen_grpfile, 1);
+    lua_pop(L, 1);
+}
+
+void GrpFile_WriteAllForDisk(Disk* disk)
+{
+    lua_State* L = disk->L;
+    for (GrpFile* grp = g_groups; grp; grp = grp->next) {
+        if (grp->dir->disk == disk && !grp->written) {
+            lua_pushcfunction(L, grpfile_write);
+            lua_rawgeti(L, LUA_REGISTRYINDEX, grp->ref);
+            lua_call(L, 1, 0);
+        }
+    }
 }

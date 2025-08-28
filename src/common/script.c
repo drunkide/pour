@@ -4,6 +4,7 @@
 #include <common/utf8.h>
 #include <common/exec.h>
 #include <common/file.h>
+#include <grp/grpfile.h>
 #include <dosbox/dosbox.h>
 #include <mkdisk/mkdisk.h>
 #include <patch/patch.h>
@@ -274,6 +275,7 @@ static int pmain(lua_State *L)
     Pour_InitLua(L);
     MkDisk_InitLua(L);
     Patch_InitLua(L);
+    GrpFile_InitLua(L);
     DOSBox_InitLua(L);
 
     int status = luaL_loadbuffer(L, (const char*)functions_lua, sizeof(functions_lua), "@functions.lua");

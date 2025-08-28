@@ -11,6 +11,7 @@
 #include <mkdisk/ext2_defs.h>
 #include <mkdisk/bootcode.h>
 #include <mkdisk/disk_config.h>
+#include <grp/grpfile.h>
 #include <patch/patch.h>
 #include <string.h>
 
@@ -93,13 +94,7 @@ static void MkDisk_ReadMetaFileForFile(Disk* dsk, const char* fileName, ext2_met
 
 /********************************************************************************************************************/
 
-STRUCT(DiskDir) {
-    Disk* disk;
-    const char* path;
-    FSDir* dir;
-};
-
-static DiskDir* MkDisk_GetDirectory(lua_State* L, int index)
+DiskDir* MkDisk_GetDirectory(lua_State* L, int index)
 {
     if (!lua_istable(L, index))
         luaL_typeerror(L, index, "directory");
@@ -116,7 +111,9 @@ static DiskDir* MkDisk_GetDirectory(lua_State* L, int index)
     return ld;
 }
 
-static DiskDir* MkDisk_PushDirectory(Disk* dsk, FSDir* dir, int parentIndex,
+#define USERVAL_DISK 1
+
+static DiskDir* MkDisk_PushDirectory(Disk* dsk, int dskIndex, FSDir* dir, int parentIndex,
     const char* fatShortName, const char* origName, const char* path)
 {
     lua_State* L = dsk->L;
@@ -126,7 +123,7 @@ static DiskDir* MkDisk_PushDirectory(Disk* dsk, FSDir* dir, int parentIndex,
     lua_newtable(L);
     luaL_setmetatable(L, CLASS_DIRECTORY_TABLE);
 
-    DiskDir* ld = (DiskDir*)lua_newuserdatauv(L, sizeof(DiskDir) + pathlen + 1, 0);
+    DiskDir* ld = (DiskDir*)lua_newuserdatauv(L, sizeof(DiskDir) + pathlen + 1, 1);
     char* dstPath = (char*)(ld + 1);
     *dstPath = '/';
     if (*path == '/')
@@ -136,6 +133,9 @@ static DiskDir* MkDisk_PushDirectory(Disk* dsk, FSDir* dir, int parentIndex,
     ld->path = dstPath;
     ld->dir = dir;
     luaL_setmetatable(L, CLASS_DIRECTORY);
+
+    lua_pushvalue(L, dskIndex);
+    lua_setiuservalue(L, -2, USERVAL_DISK);
 
     lua_rawsetp(L, -2, &marker_DIR);
 
@@ -152,7 +152,7 @@ static DiskDir* MkDisk_PushDirectory(Disk* dsk, FSDir* dir, int parentIndex,
     return ld;
 }
 
-static const DiskDir* MkDisk_PushMakeDir(Disk* dsk, const DiskDir* parentDir,
+static const DiskDir* MkDisk_PushMakeDir(Disk* dsk, int dskIndex, const DiskDir* parentDir,
     int parentIndex, const char* dirName, const ext2_meta* meta)
 {
     lua_State* L = dsk->L;
@@ -187,7 +187,7 @@ static const DiskDir* MkDisk_PushMakeDir(Disk* dsk, const DiskDir* parentDir,
             case FS_EXT2: dir = ext2_create_directory(parentDir->dir, dirName, meta); break;
         }
 
-        subdir = MkDisk_PushDirectory(dsk, dir, parentIndex, fatShortName, dirName, newPath);
+        subdir = MkDisk_PushDirectory(dsk, dskIndex, dir, parentIndex, fatShortName, dirName, newPath);
 
         lua_remove(L, -2);
     }
@@ -255,7 +255,7 @@ static void MkDisk_AddFile(Disk* dsk, const DiskDir* dstDir,
     lua_settop(L, n);
 }
 
-static void MkDisk_AddFileContent(Disk* dsk, const DiskDir* dstDir,
+void MkDisk_AddFileContent(Disk* dsk, const DiskDir* dstDir,
     const char* name, const char* data, size_t dataLen)
 {
     lua_State* L = dsk->L;
@@ -302,7 +302,7 @@ typedef enum recursive_t {
     NON_RECURSIVE,
 } recursive_t;
 
-static void MkDisk_ScanDir(Disk* dsk,
+static void MkDisk_ScanDir(Disk* dsk, int dskIndex,
     const char* prefix, const DiskDir* d, int dirIndex, const char* path, recursive_t recursive)
 {
     lua_State* L = dsk->L;
@@ -350,12 +350,12 @@ static void MkDisk_ScanDir(Disk* dsk,
                 } else {
                     ext2_meta meta;
                     MkDisk_ReadMetaFileForDirectory(dsk, buf, &meta);
-                    subdir = MkDisk_PushMakeDir(dsk, d, dirIndex, d_name, &meta);
+                    subdir = MkDisk_PushMakeDir(dsk, dskIndex, d, dirIndex, d_name, &meta);
                     subdirIndex = lua_gettop(L);
                 }
 
                 const char* subname = lua_pushfstring(L, "%s%s/", path, d_name);
-                MkDisk_ScanDir(dsk, prefix, subdir, subdirIndex, subname, recursive);
+                MkDisk_ScanDir(dsk, dskIndex, prefix, subdir, subdirIndex, subname, recursive);
 
                 lua_settop(L, top2);
             }
@@ -390,7 +390,8 @@ static int mkdisk_enable_lfn(lua_State* L)
 static int mkdisk_add_directory(lua_State* L)
 {
     size_t srcDirLen;
-    Disk* dsk = (Disk*)luaL_checkudata(L, 1, CLASS_DISK);
+    const int dskIndex = 1;
+    Disk* dsk = (Disk*)luaL_checkudata(L, dskIndex, CLASS_DISK);
     const int dstDirIndex = 2;
     const DiskDir* dstDir = MkDisk_GetDirectory(L, dstDirIndex);
     const int srcDirIndex = 3;
@@ -426,7 +427,7 @@ static int mkdisk_add_directory(lua_State* L)
     }
 
     luaL_checkstack(L, 1000, "MkDisk_ScanDir");
-    MkDisk_ScanDir(dsk, srcDir, dstDir, dstDirIndex, "", recursive);
+    MkDisk_ScanDir(dsk, dskIndex, srcDir, dstDir, dstDirIndex, "", recursive);
 
     Con_Print(L, COLOR_PROGRESS_SIDE, "]\n");
 
@@ -435,7 +436,8 @@ static int mkdisk_add_directory(lua_State* L)
 
 static int mkdisk_make_directory(lua_State* L)
 {
-    Disk* dsk = (Disk*)luaL_checkudata(L, 1, CLASS_DISK);
+    const int dskIndex = 1;
+    Disk* dsk = (Disk*)luaL_checkudata(L, dskIndex, CLASS_DISK);
     const int dstDirIndex = 2;
     const DiskDir* dstDir = MkDisk_GetDirectory(L, dstDirIndex);
     const char* name = luaL_checkstring(L, 3);
@@ -449,7 +451,7 @@ static int mkdisk_make_directory(lua_State* L)
     meta.type_and_perm = EXT2_TYPE_DIRECTORY | 0755;
     meta.uid = 0;
     meta.gid = 0;
-    MkDisk_PushMakeDir(dsk, dstDir, dstDirIndex, name, &meta);
+    MkDisk_PushMakeDir(dsk, dskIndex, dstDir, dstDirIndex, name, &meta);
 
     return 1;
 }
@@ -490,6 +492,7 @@ static int mkdisk_add_file_content(lua_State* L)
 static void MkDisk_EnsureDiskBuilt(Disk* dsk)
 {
     if (!dsk->built) {
+        GrpFile_WriteAllForDisk(dsk);
         switch (dsk->fs) {
             case FS_FAT: Fat_Write(dsk); break;
             case FS_EXT2: Ext2_Write(dsk); break;
@@ -602,8 +605,8 @@ static const luaL_Reg disk_funcs[] = {
     { NULL, NULL }
 };
 
-const int USERVAL_FILE_NAME = 1;
-const int USERVAL_ROOT_DIRECTORY = 2;
+#define USERVAL_FILE_NAME 1
+#define USERVAL_ROOT_DIRECTORY 2
 
 static int mkdisk_create(lua_State* L)
 {
@@ -676,7 +679,7 @@ static int mkdisk_create(lua_State* L)
         case FS_FAT: Fat_Init(dsk, bootCode, &root); break;
         case FS_EXT2: Ext2_Init(dsk, &root); break;
     }
-    MkDisk_PushDirectory(dsk, root, lua_absindex(L, -1), "/", "/", "");
+    MkDisk_PushDirectory(dsk, resultIdx, root, lua_absindex(L, -1), "/", "/", "");
 
     DiskList* list;
     lua_rawgetp(L, LUA_REGISTRYINDEX, &marker_LIST);

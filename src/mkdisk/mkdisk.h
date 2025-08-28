@@ -27,6 +27,17 @@ STRUCT(Disk) {
     bool built;
 };
 
+STRUCT(DiskDir) {
+    Disk* disk;
+    const char* path;
+    FSDir* dir;
+};
+
+DiskDir* MkDisk_GetDirectory(lua_State* L, int index);
+
+void MkDisk_AddFileContent(Disk* dsk, const DiskDir* dstDir,
+    const char* name, const char* data, size_t dataLen);
+
 void MkDisk_InitLua(lua_State* L);
 void MkDisk_WriteAllDisks(lua_State* L);
 
