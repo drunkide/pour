@@ -1,7 +1,7 @@
-#include <common/common.h>
 #ifdef NDEBUG
 #undef NDEBUG
 #endif
+#include <common/common.h>
 #include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -10,9 +10,8 @@
 #include <ctype.h>
 #include <assert.h>
 #include <time.h>
-#include <lua.h>
-#include <mkdisk/disk_config.h>
 #include <mkdisk/mkdisk.h>
+#include <mkdisk/disk_config.h>
 #include <mkdisk/ext2.h>
 #include <mkdisk/vhd.h>
 #include <mkdisk/mbr.h>
@@ -27,9 +26,10 @@ typedef struct direntry {
     char* name;
 } direntry;
 
-struct dir {
-    struct dir* next;
-    struct dir* parent;
+struct FSDir {
+    struct FSDir* next;
+    struct FSDir* parent;
+    Disk* disk;
     size_t inode;
     size_t entryCount;
     direntry entries[MAX_DIR_ENTRIES];
@@ -47,8 +47,8 @@ size_t g_blocks_per_group;
 size_t g_inodes_per_group;
 size_t g_inode_table_blocks;
 
-static dir root_dir;
-static dir* last_dir;
+static FSDir root_dir;
+static FSDir* last_dir;
 
 static size_t ext2_alloc_inode(void)
 {
@@ -128,14 +128,16 @@ static size_t ext2_alloc_block(bool is_directory)
     exit(1);
 }
 
-static void ext2_write_blocks(size_t blockIndex, const void* data, size_t length)
+static void Ext2_WriteBlocks(Disk* dsk, size_t blockIndex, const void* data, size_t length)
 {
-    vhd_write_sectors(MBR_DISK_START + (blockIndex * EXT2_BLOCKSIZE) / VHD_SECTOR_SIZE, data, length);
+    const disk_config_t* disk_config = dsk->config;
+    VHD_WriteSectors(dsk, MBR_DISK_START + (blockIndex * EXT2_BLOCKSIZE) / VHD_SECTOR_SIZE, data, length);
 }
 
 /********************************************************************************************************************/
 
 typedef struct stream_t {
+    Disk* disk;
     ext2_inode* inode;
     uint32_t* singly;
     uint32_t* doubly;
@@ -156,13 +158,14 @@ typedef struct stream_t {
 static void ext2_write_current_block(stream_t* stream)
 {
     if (stream->currentBlock != 0) {
-        ext2_write_blocks(stream->currentBlock, stream->buffer, stream->bufferPtr - stream->buffer);
+        Ext2_WriteBlocks(stream->disk, stream->currentBlock, stream->buffer, stream->bufferPtr - stream->buffer);
         //printf("      write -> %lu\n", (unsigned long)stream->currentBlock);
     }
 }
 
-static void ext2_open(stream_t* stream, ext2_inode* inode, bool isDir)
+static void ext2_open(stream_t* stream, Disk* disk, ext2_inode* inode, bool isDir)
 {
+    stream->disk = disk;
     stream->inode = inode;
     stream->singly = NULL;
     stream->doubly = NULL;
@@ -183,18 +186,21 @@ static void ext2_close(stream_t* stream)
     ext2_write_current_block(stream);
 
     if (stream->singly) {
-        ext2_write_blocks(stream->inode->indirect_singly, stream->singly, stream->nextSinglyBlockOffset * sizeof(uint32_t));
+        Ext2_WriteBlocks(stream->disk, stream->inode->indirect_singly,
+            stream->singly, stream->nextSinglyBlockOffset * sizeof(uint32_t));
         free(stream->singly);
     }
 
     if (stream->doublyInner) {
         size_t block = stream->doubly[stream->nextDoublyBlockOffset - 1];
-        ext2_write_blocks(block, stream->doublyInner, stream->nextDoublyInnerBlockOffset * sizeof(uint32_t));
+        Ext2_WriteBlocks(stream->disk, block,
+            stream->doublyInner, stream->nextDoublyInnerBlockOffset * sizeof(uint32_t));
         free(stream->doublyInner);
     }
 
     if (stream->doubly) {
-        ext2_write_blocks(stream->inode->indirect_doubly, stream->doubly, stream->nextDoublyBlockOffset * sizeof(uint32_t));
+        Ext2_WriteBlocks(stream->disk, stream->inode->indirect_doubly,
+            stream->doubly, stream->nextDoublyBlockOffset * sizeof(uint32_t));
         free(stream->doubly);
     }
 
@@ -266,7 +272,8 @@ static void ext2_stream_alloc_block(stream_t* stream)
 
     if (stream->nextDoublyBlockOffset < EXT2_BLOCKSIZE / sizeof(uint32_t)) {
         size_t block = stream->doubly[stream->nextDoublyBlockOffset - 1];
-        ext2_write_blocks(block, stream->doublyInner, stream->nextDoublyInnerBlockOffset * sizeof(uint32_t));
+        Ext2_WriteBlocks(stream->disk, block,
+            stream->doublyInner, stream->nextDoublyInnerBlockOffset * sizeof(uint32_t));
 
         ++stream->extraAllocatedBlocks;
 
@@ -316,15 +323,17 @@ static void ext2_flush_dir_entry(void)
     dir_size += dir_entry.entry_size;
 }
 
-static void ext2_build_dir(const dir* d)
+static void Ext2_BuildDir(const FSDir* d)
 {
+    Disk* dsk = d->disk;
+
     dir_size = 0;
 
     dir_entry.inode = 0;
     dir_entry.name_length = 0;
     dir_entry.entry_size = sizeof(dir_entry);
 
-    ext2_open(&dir_stream, ext2_get_inode(d->inode), true);
+    ext2_open(&dir_stream, dsk, ext2_get_inode(d->inode), true);
     for (size_t i = 0; i < d->entryCount; i++) {
         size_t nameLength = strlen(d->entries[i].name);
         size_t entrySize = sizeof(ext2_direntry) + nameLength;
@@ -365,7 +374,7 @@ static void ext2_build_dir(const dir* d)
     assert(dir_size == EXT2_BLOCKSIZE);
 }
 
-static void ext2_add_direntry(dir* dir, const char* name, size_t inode)
+static void ext2_add_direntry(FSDir* dir, const char* name, size_t inode)
 {
     if (dir->entryCount >= MAX_DIR_ENTRIES) {
         fprintf(stderr, "too many directory entries!\n");
@@ -381,11 +390,14 @@ static void ext2_add_direntry(dir* dir, const char* name, size_t inode)
 
 /********************************************************************************************************************/
 
-void ext2_init(void)
+void Ext2_Init(Disk* dsk, FSDir** outRoot)
 {
+    const disk_config_t* disk_config = dsk->config;
+
     t = time(NULL) / (10*86400) * (10*86400);
 
     memset(&root_dir, 0, sizeof(root_dir));
+    root_dir.disk = dsk; /* FIXME */
 
     size_t disk_size = MBR_DISK_SIZE * VHD_SECTOR_SIZE;
 
@@ -493,20 +505,18 @@ void ext2_init(void)
     }
 
     last_dir = &root_dir;
+    *outRoot = &root_dir;
 }
 
-dir* ext2_root_directory(void)
+FSDir* ext2_create_directory(FSDir* parent, const char* name, const ext2_meta* meta)
 {
-    return &root_dir;
-}
-
-dir* ext2_create_directory(dir* parent, const char* name, const ext2_meta* meta)
-{
-    dir* d = (dir*)calloc(1, sizeof(dir));
+    FSDir* d = (FSDir*)calloc(1, sizeof(FSDir));
     if (!d) {
         fprintf(stderr, "memory allocation failed.\n");
         exit(1);
     }
+
+    d->disk = parent->disk;
 
     if (parent->entryCount >= MAX_DIR_ENTRIES) {
         fprintf(stderr, "too many directory entries!\n");
@@ -537,7 +547,7 @@ dir* ext2_create_directory(dir* parent, const char* name, const ext2_meta* meta)
     return d;
 }
 
-void ext2_add_file(dir* parent, const char* name, const void* data, size_t size, const ext2_meta* meta)
+void ext2_add_file(FSDir* parent, const char* name, const void* data, size_t size, const ext2_meta* meta)
 {
     size_t inode = ext2_alloc_inode();
     ext2_inode* inode_ptr = ext2_get_inode(inode);
@@ -571,28 +581,30 @@ void ext2_add_file(dir* parent, const char* name, const void* data, size_t size,
         inode_ptr->block_pointers[0] = (major << 16) | minor;
     } else {
         stream_t stream;
-        ext2_open(&stream, inode_ptr, false);
+        ext2_open(&stream, parent->disk, inode_ptr, false);
         ext2_append(&stream, data, size);
         ext2_close(&stream);
     }
 }
 
-void ext2_write(void)
+void Ext2_Write(Disk* dsk)
 {
-    for (dir* p = &root_dir; p; p = p->next)
-        ext2_build_dir(p);
+    const disk_config_t* disk_config = dsk->config;
+
+    for (FSDir* p = &root_dir; p; p = p->next)
+        Ext2_BuildDir(p);
 
     size_t superblockSector = MBR_DISK_START + EXT2_SUPERBLOCK_START_OFFSET / VHD_SECTOR_SIZE;
-    vhd_write_sectors(superblockSector, &ext2_superblock, sizeof(ext2_superblock));
+    VHD_WriteSectors(dsk, superblockSector, &ext2_superblock, sizeof(ext2_superblock));
 
     size_t grouptableSector = MBR_DISK_START + EXT2_GROUP_TABLE_START_OFFSET / VHD_SECTOR_SIZE;
-    vhd_write_sectors(grouptableSector, g_blockgroups, sizeof(ext2_blockgroupdesc) * g_block_group_count);
+    VHD_WriteSectors(dsk, grouptableSector, g_blockgroups, sizeof(ext2_blockgroupdesc) * g_block_group_count);
 
     for (size_t i = 0; i < g_block_group_count; i++) {
         ext2_blockgroupdesc* p = &g_blockgroups[i];
-        ext2_write_blocks(p->block_usage_bitmap_blockno, g_block_usage_bitmap[i], g_blocks_per_group);
-        ext2_write_blocks(p->inode_usage_bitmap_blockno, g_inode_usage_bitmap[i], g_inodes_per_group);
-        ext2_write_blocks(p->inode_table_blockno, g_inode_table[i], g_inodes_per_group * sizeof(ext2_inode));
+        Ext2_WriteBlocks(dsk, p->block_usage_bitmap_blockno, g_block_usage_bitmap[i], g_blocks_per_group);
+        Ext2_WriteBlocks(dsk, p->inode_usage_bitmap_blockno, g_inode_usage_bitmap[i], g_inodes_per_group);
+        Ext2_WriteBlocks(dsk, p->inode_table_blockno, g_inode_table[i], g_inodes_per_group * sizeof(ext2_inode));
     }
 
   #if 0

@@ -28,6 +28,4 @@ extern const disk_config_t disk_510M;
 extern const disk_config_t disk_520M;
 extern const disk_config_t disk_1G;
 
-extern const disk_config_t* disk_config;
-
 #endif

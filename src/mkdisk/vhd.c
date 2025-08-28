@@ -32,8 +32,9 @@ static uint32_t checksum(const void* data, size_t size)
     return MSB32(~checksum);
 }
 
-void vhd_init()
+void VHD_Init(Disk* dsk)
 {
+    const disk_config_t* disk_config = dsk->config;
     nextOffset = disk_config->vhd_next_offset;
 
     first = NULL;
@@ -80,8 +81,10 @@ void vhd_init()
     memset(bat, 0xFF, batSize);
 }
 
-uint8_t* vhd_sector(size_t index)
+uint8_t* VHD_Sector(Disk* dsk, size_t index)
 {
+    const disk_config_t* disk_config = dsk->config;
+
     size_t blockIndex = index / VHD_SECTORS_PER_BLOCK;
     size_t sectorIndex = index % VHD_SECTORS_PER_BLOCK;
 
@@ -134,14 +137,14 @@ const uint8_t* vhd_read_sector(size_t index)
     return &block->data.data[sectorIndex * VHD_SECTOR_SIZE];
 }
 
-void vhd_write_sectors(size_t firstSector, const void* data, size_t size)
+void VHD_WriteSectors(Disk* dsk, size_t firstSector, const void* data, size_t size)
 {
     const uint8_t* src = (const uint8_t*)data;
 
     while (size != 0) {
         size_t srcSize = (size > VHD_SECTOR_SIZE ? VHD_SECTOR_SIZE : size);
         if (memcmp(src, zeros, srcSize) != 0) {
-            uint8_t* dst = vhd_sector(firstSector);
+            uint8_t* dst = VHD_Sector(dsk, firstSector);
             memcpy(dst, src, srcSize);
         }
 
@@ -151,8 +154,10 @@ void vhd_write_sectors(size_t firstSector, const void* data, size_t size)
     }
 }
 
-void VHD_Write(lua_State* L, const char* file)
+void VHD_Write(Disk* dsk, const char* file)
 {
+    lua_State* L = dsk->L;
+
     size_t fileSize = sizeof(footer) + sizeof(dynhdr) + batSize;
     for (vhd_blockchain* block = first; block; block = block->next)
         fileSize += sizeof(vhd_block);
@@ -175,8 +180,11 @@ void VHD_Write(lua_State* L, const char* file)
     Write_Commit(wr);
 }
 
-void VHD_WriteAsIMG(lua_State* L, const char* file, bool includeMBR)
+void VHD_WriteAsIMG(Disk* dsk, const char* file, bool includeMBR)
 {
+    const disk_config_t* disk_config = dsk->config;
+    lua_State* L = dsk->L;
+
     size_t fileSize = (includeMBR ? disk_config->vhd_size : disk_config->mbr_disk_size * VHD_SECTOR_SIZE);
 
     Write* wr = Write_Begin(L, file, fileSize);

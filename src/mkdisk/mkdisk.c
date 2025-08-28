@@ -1,18 +1,6 @@
 #include <common/common.h>
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#endif
-#include <string.h>
-#include <stdlib.h>
-#include <errno.h>
-#include <stdio.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <dirent.h>
-#include <stdbool.h>
-#include <lua.h>
-#include <lauxlib.h>
+#include <common/file.h>
+#include <common/console.h>
 #include <mkdisk/mkdisk.h>
 #include <mkdisk/vhd.h>
 #include <mkdisk/mbr.h>
@@ -25,101 +13,129 @@
 
 #define CLASS_DIRECTORY "mkdisk.directory"
 #define CLASS_DIRECTORY_TABLE "mkdisk.directory.table"
+#define CLASS_DISK "mkdisk.disk"
 
-static const char lua_DIR;
-static bool initialized = false;
-static bool written = false;
+static char marker_DIR;
 
-bool g_skip_mkdisk;
-bool g_use_ext2;
-bool g_mbr_fat;
+/********************************************************************************************************************/
 
-static void read_meta_file(uint16_t default_perm, const char* file, ext2_meta* out)
+static void MkDisk_ReadMetaFile(Disk* dsk, uint16_t default_perm, const char* file, ext2_meta* out)
 {
+    lua_State* L = dsk->L;
+
     out->type_and_perm = default_perm;
     out->uid = 0;
     out->gid = 0;
 
-    FILE* f = fopen(file, "rb");
-    if (f) {
-        unsigned t, u, g;
-        char type;
-        if (fscanf(f, "%c %o %u:%u", &type, &t, &u, &g) != 4) {
-            fprintf(stderr, "invalid meta file: %s\n", file);
-            exit(1);
-        }
-        fclose(f);
-        switch (type) {
-            case 'D': out->type_and_perm = EXT2_TYPE_DIRECTORY; break;
-            case 'Q': out->type_and_perm = EXT2_TYPE_FIFO; break;
-            case 'C': out->type_and_perm = EXT2_TYPE_CHAR_DEV; break;
-            case 'B': out->type_and_perm = EXT2_TYPE_BLOCK_DEV; break;
-            case 'F': out->type_and_perm = EXT2_TYPE_FILE; break;
-            case 'L': out->type_and_perm = EXT2_TYPE_SYMLINK; break;
-            case 'S': out->type_and_perm = EXT2_TYPE_SOCKET; break;
-            default:
-                fprintf(stderr, "invalid meta file: %s\n", file);
-                exit(1);
-        }
-        if (t > 0xfff || u > 0xffff || g > 0xffff) {
-            fprintf(stderr, "invalid meta file: %s\n", file);
-            exit(1);
-        }
-        out->type_and_perm |= t;
-        out->uid = u;
-        out->gid = g;
+    if (!File_Exists(L, file))
+        return;
+
+    const char* str = File_PushContents(L, file, NULL);
+
+    unsigned t, u, g;
+    char type;
+    if (sscanf(str, "%c %o %u:%u", &type, &t, &u, &g) != 4)
+        luaL_error(L, "invalid meta file: %s", file);
+
+    lua_pop(L, 1);
+
+    switch (type) {
+        case 'D': out->type_and_perm = EXT2_TYPE_DIRECTORY; break;
+        case 'Q': out->type_and_perm = EXT2_TYPE_FIFO; break;
+        case 'C': out->type_and_perm = EXT2_TYPE_CHAR_DEV; break;
+        case 'B': out->type_and_perm = EXT2_TYPE_BLOCK_DEV; break;
+        case 'F': out->type_and_perm = EXT2_TYPE_FILE; break;
+        case 'L': out->type_and_perm = EXT2_TYPE_SYMLINK; break;
+        case 'S': out->type_and_perm = EXT2_TYPE_SOCKET; break;
+        default: luaL_error(L, "invalid meta file: %s", file);
     }
+
+    if (t > 0xfff || u > 0xffff || g > 0xffff)
+        luaL_error(L, "invalid meta file: %s", file);
+
+    out->type_and_perm |= t;
+    out->uid = u;
+    out->gid = g;
 }
 
-lua_dir* get_directory(lua_State* L, int index)
+static void MkDisk_ReadMetaFileForDirectory(Disk* dsk, const char* dirName, ext2_meta* out)
+{
+    lua_State* L = dsk->L;
+    const char* buf = lua_pushfstring(L, "%s/[meta]", dirName);
+
+    MkDisk_ReadMetaFile(dsk, EXT2_TYPE_DIRECTORY | 0755, buf, out);
+    if ((out->type_and_perm & EXT2_TYPE_MASK) != EXT2_TYPE_DIRECTORY)
+        luaL_error(L, "invalid meta file for directory: %s", buf);
+
+    lua_pop(L, 1);
+}
+
+static void MkDisk_ReadMetaFileForFile(Disk* dsk, const char* fileName, ext2_meta* out)
+{
+    lua_State* L = dsk->L;
+    const char* buf = lua_pushfstring(L, "%s[meta]", fileName);
+
+    MkDisk_ReadMetaFile(dsk, EXT2_TYPE_FILE | 0644, buf, out);
+    if ((out->type_and_perm & EXT2_TYPE_MASK) == EXT2_TYPE_DIRECTORY)
+        luaL_error(L, "invalid meta file: %s", buf);
+
+    lua_pop(L, 1);
+}
+
+/********************************************************************************************************************/
+
+STRUCT(DiskDir) {
+    Disk* disk;
+    const char* path;
+    FSDir* dir;
+};
+
+static DiskDir* MkDisk_GetDirectory(lua_State* L, int index)
 {
     if (!lua_istable(L, index))
-        return NULL;
+        luaL_typeerror(L, index, "directory");
 
-    lua_rawgetp(L, index, &lua_DIR);
-    if (lua_isnoneornil(L, -1)) {
-        lua_pop(L, 1);
-        return NULL;
-    }
+    lua_rawgetp(L, index, &marker_DIR);
+    if (lua_isnoneornil(L, -1))
+        luaL_typeerror(L, index, "directory");
 
-    lua_dir* ld = (lua_dir*)luaL_testudata(L, -1, CLASS_DIRECTORY);
-    if (!ld) {
-        lua_pop(L, 1);
-        return NULL;
-    }
+    DiskDir* ld = (DiskDir*)luaL_testudata(L, -1, CLASS_DIRECTORY);
+    if (!ld)
+        luaL_typeerror(L, index, "directory");
 
     lua_pop(L, 1);
     return ld;
 }
 
-static lua_dir* push_directory(lua_State* L, dir* dir, int parentIndex,
+static DiskDir* MkDisk_PushDirectory(Disk* dsk, FSDir* dir, int parentIndex,
     const char* fatShortName, const char* origName, const char* path)
 {
+    lua_State* L = dsk->L;
+
     size_t pathlen = strlen(path) + 1;
 
     lua_newtable(L);
-    luaL_getmetatable(L, CLASS_DIRECTORY_TABLE);
-    lua_setmetatable(L, -2);
+    luaL_setmetatable(L, CLASS_DIRECTORY_TABLE);
 
-    lua_dir* ld = (lua_dir*)lua_newuserdatauv(L, sizeof(lua_dir) + pathlen + 1, 0);
+    DiskDir* ld = (DiskDir*)lua_newuserdatauv(L, sizeof(DiskDir) + pathlen + 1, 0);
     char* dstPath = (char*)(ld + 1);
     *dstPath = '/';
     if (*path == '/')
         ++path;
     memcpy(dstPath + 1, path, pathlen);
+    ld->disk = dsk;
     ld->path = dstPath;
     ld->dir = dir;
-    luaL_getmetatable(L, CLASS_DIRECTORY);
-    lua_setmetatable(L, -2);
+    luaL_setmetatable(L, CLASS_DIRECTORY);
 
-    lua_rawsetp(L, -2, &lua_DIR);
+    lua_rawsetp(L, -2, &marker_DIR);
 
-    if (!g_use_ext2) {
+    if (dsk->fs == FS_FAT) {
         lua_pushvalue(L, -1);
         lua_setfield(L, parentIndex, fatShortName);
     }
 
-    if (g_use_ext2 || fat_enable_lfn) {
+    if (dsk->fs != FS_FAT || dsk->fatEnableLFN) {
         lua_pushvalue(L, -1);
         lua_setfield(L, parentIndex, origName);
     }
@@ -127,13 +143,18 @@ static lua_dir* push_directory(lua_State* L, dir* dir, int parentIndex,
     return ld;
 }
 
-static const lua_dir* make_dir(lua_State* L, const lua_dir* parentDir,
+static const DiskDir* MkDisk_PushMakeDir(Disk* dsk, const DiskDir* parentDir,
     int parentIndex, const char* dirName, const ext2_meta* meta)
 {
-    const lua_dir* subdir;
+    lua_State* L = dsk->L;
+
+    const DiskDir* subdir;
     char fatShortName[13];
 
-    if (g_use_ext2 || fat_enable_lfn)
+    if (parentDir->disk != dsk)
+        luaL_error(L, "parentDir disk mismatch!");
+
+    if (dsk->fs != FS_FAT || dsk->fatEnableLFN)
         lua_getfield(L, parentIndex, dirName);
     else {
         fat_normalize_name(fatShortName, dirName);
@@ -141,9 +162,9 @@ static const lua_dir* make_dir(lua_State* L, const lua_dir* parentDir,
     }
 
     if (!lua_isnoneornil(L, -1))
-        subdir = get_directory(L, -1);
+        subdir = MkDisk_GetDirectory(L, -1);
     else {
-        lua_pop(L, 1); // pop nil
+        lua_pop(L, 1); /* pop nil */
 
         lua_pushstring(L, parentDir->path);
         lua_pushstring(L, dirName);
@@ -151,13 +172,13 @@ static const lua_dir* make_dir(lua_State* L, const lua_dir* parentDir,
         lua_concat(L, 3);
         const char* newPath = lua_tostring(L, -1);
 
-        dir* dir;
-        if (g_use_ext2)
-            dir = ext2_create_directory(parentDir->dir, dirName, meta);
-        else
-            dir = fat_create_directory(parentDir->dir, dirName);
+        FSDir* dir;
+        switch (dsk->fs) {
+            case FS_FAT: dir = fat_create_directory(parentDir->dir, dirName); break;
+            case FS_EXT2: dir = ext2_create_directory(parentDir->dir, dirName, meta); break;
+        }
 
-        subdir = push_directory(L, dir, parentIndex, fatShortName, dirName, newPath);
+        subdir = MkDisk_PushDirectory(dsk, dir, parentIndex, fatShortName, dirName, newPath);
 
         lua_remove(L, -2);
     }
@@ -165,19 +186,23 @@ static const lua_dir* make_dir(lua_State* L, const lua_dir* parentDir,
     return subdir;
 }
 
-static void add_file(lua_State* L, const lua_dir* dst_dir,
-    const char* name, const char* fileName, const unsigned long long* pFileSize)
+/********************************************************************************************************************/
+
+static void MkDisk_AddFile(Disk* dsk, const DiskDir* dstDir,
+    const char* name, const char* fileName, const uint64_t* pFileSize)
 {
+    lua_State* L = dsk->L;
+
+    int n = lua_gettop(L);
     char fatShortName[13];
 
-    FILE* f = fopen(fileName, "rb");
-    if (!f) {
-        fprintf(stderr, "can't open \"%s\": %s\n", fileName, strerror(errno));
-        exit(1);
-    }
+    if (dstDir->disk != dsk)
+        luaL_error(L, "dstDir disk mismatch!");
+
+    File* f = File_PushOpen(L, fileName, FILE_OPEN_SEQUENTIAL_READ);
 
     const char* fsName;
-    if (g_use_ext2)
+    if (dsk->fs != FS_FAT || dsk->fatEnableLFN)
         fsName = name;
     else {
         fat_normalize_name(fatShortName, name);
@@ -185,93 +210,81 @@ static void add_file(lua_State* L, const lua_dir* dst_dir,
     }
 
     if (!pFileSize)
-        printf("\n=> %s%s\n", dst_dir->path, fsName);
+        Con_PrintF(L, COLOR_STATUS, "\n=> %s%s\n", dstDir->path, fsName);
 
     PATCH* patch = patch_find(L, fsName);
 
-    unsigned long long file_size;
-    if (pFileSize)
-        file_size = *pFileSize;
+    size_t fileSize;
+    if (!pFileSize)
+        fileSize = File_GetSize(f);
     else {
-        fseek(f, 0, SEEK_END);
-        long size = ftell(f);
-        fseek(f, 0, SEEK_SET);
-        if (ferror(f) || size < 0) {
-            fprintf(stderr, "can't determine size of file \"%s\": %s\n", fileName, strerror(errno));
-            fclose(f);
-            exit(1);
-        }
-        file_size = (unsigned long long)size;
+        if (*pFileSize > MAX_FILE_SIZE)
+            luaL_error(L, "file too large: %s", name);
+        fileSize = (size_t)*pFileSize;
     }
 
-    void* ptr = malloc(file_size + (patch ? patch->extraBytes : 0));
-    if (!ptr) {
-        fprintf(stderr, "file \"%s\" is too large.\n", fileName);
-        fclose(f);
-        exit(1);
-    }
+    void* ptr = lua_newuserdatauv(L, fileSize + (patch ? patch->extraBytes : 0), 0);
 
-    errno = 0;
-    size_t bytesRead = fread(ptr, 1, file_size, f);
-    if (ferror(f) || bytesRead != file_size) {
-        fprintf(stderr, "error reading file \"%s\": %s\n", fileName, strerror(errno));
-        free(ptr);
-        fclose(f);
-        exit(1);
-    }
-
-    fclose(f);
+    File_Read(f, ptr, fileSize);
+    File_Close(f);
 
     if (patch)
-        patch_apply(L, name, patch, &ptr, &file_size);
+        patch_apply(L, name, patch, &ptr, &fileSize);
 
-    if (!g_use_ext2)
-        fat_add_file(dst_dir->dir, name, ptr, file_size);
-    else {
-        char buf[1024];
-        sprintf(buf, "%s[meta]", fileName);
-
-        ext2_meta meta;
-        read_meta_file(EXT2_TYPE_FILE | 0644, buf, &meta);
-        if ((meta.type_and_perm & EXT2_TYPE_MASK) == EXT2_TYPE_DIRECTORY) {
-            fprintf(stderr, "invalid meta file: %s\n", buf);
-            exit(1);
+    switch (dsk->fs) {
+        case FS_FAT:
+            fat_add_file(dstDir->dir, name, ptr, fileSize);
+            break;
+        case FS_EXT2: {
+            ext2_meta meta;
+            MkDisk_ReadMetaFileForFile(dsk, fileName, &meta);
+            ext2_add_file(dstDir->dir, name, ptr, fileSize, &meta);
+            break;
         }
-
-        ext2_add_file(dst_dir->dir, name, ptr, file_size, &meta);
     }
 
-    free(ptr);
+    lua_settop(L, n);
 }
 
-static void add_file_content(lua_State* L, const lua_dir* dst_dir,
+static void MkDisk_AddFileContent(Disk* dsk, const DiskDir* dstDir,
     const char* name, const char* data, size_t dataLen)
 {
+    lua_State* L = dsk->L;
+
+    int n = lua_gettop(L);
     char fatShortName[13];
 
-    DONT_WARN_UNUSED(L);
+    if (dstDir->disk != dsk)
+        luaL_error(L, "dstDir disk mismatch!");
 
     const char* fsName;
-    if (g_use_ext2)
+    if (dsk->fs != FS_FAT || dsk->fatEnableLFN)
         fsName = name;
     else {
         fat_normalize_name(fatShortName, name);
         fsName = fatShortName;
     }
 
-    printf("\n=> %s%s (generated)\n", dst_dir->path, fsName);
+    Con_PrintF(L, COLOR_STATUS, "\n=> %s%s (generated)\n", dstDir->path, fsName);
 
-    if (!g_use_ext2)
-        fat_add_file(dst_dir->dir, name, data, dataLen);
-    else {
-        ext2_meta meta;
-        meta.type_and_perm = EXT2_TYPE_FILE | 0644;
-        meta.uid = 0;
-        meta.gid = 0;
-
-        ext2_add_file(dst_dir->dir, name, data, dataLen, &meta);
+    switch (dsk->fs) {
+        case FS_FAT:
+            fat_add_file(dstDir->dir, name, data, dataLen);
+            break;
+        case FS_EXT2: {
+            ext2_meta meta;
+            meta.type_and_perm = EXT2_TYPE_FILE | 0644;
+            meta.uid = 0;
+            meta.gid = 0;
+            ext2_add_file(dstDir->dir, name, data, dataLen, &meta);
+            break;
+        }
     }
+
+    lua_settop(L, n);
 }
+
+/********************************************************************************************************************/
 
 typedef enum recursive_t {
     RECURSIVE,
@@ -280,195 +293,105 @@ typedef enum recursive_t {
     NON_RECURSIVE,
 } recursive_t;
 
-static void scan_dir(lua_State* L,
-    const char* prefix, const lua_dir* d, int dirIndex, const char* path, recursive_t recursive)
+static void MkDisk_ScanDir(Disk* dsk,
+    const char* prefix, const DiskDir* d, int dirIndex, const char* path, recursive_t recursive)
 {
-    char buf[1024];
-    snprintf(buf, sizeof(buf), "%s%s", prefix, path);
-    DIR* it = opendir(buf);
-    if (!it) {
-        fprintf(stderr, "can't open dir \"%s\": %s\n", buf, strerror(errno));
-        exit(1);
-    }
+    lua_State* L = dsk->L;
+    int top = lua_gettop(L);
+
+    if (d->disk != dsk)
+        luaL_error(L, "dir disk mismatch!");
+
+    Dir* it = File_PushOpenDir(L, lua_pushfstring(L, "%s%s", prefix, path));
 
     for (;;) {
-        errno = 0;
-        struct dirent* e = readdir(it);
-        if (!e) {
-            if (errno) {
-                fprintf(stderr, "can't read dir \"%s\": %s\n", buf, strerror(errno));
-                closedir(it);
-                exit(1);
-            }
+        const char* d_name = File_ReadDir(it);
+        if (!d_name)
             break;
-        }
 
-        size_t d_name_len = strlen(e->d_name);
-        if (d_name_len == 1 && e->d_name[0] == '.')
+        size_t d_name_len = strlen(d_name);
+        if (d_name_len == 1 && d_name[0] == '.')
             continue;
-        if (d_name_len == 2 && e->d_name[0] == '.' && e->d_name[1] == '.')
+        if (d_name_len == 2 && d_name[0] == '.' && d_name[1] == '.')
             continue;
 
         if (recursive == RECURSIVE_FLAT_SKIP_CMAKE) {
-            if (d_name_len == 14 && !memcmp(e->d_name, "CMakeLists.txt", 14))
+            if (d_name_len == 14 && !memcmp(d_name, "CMakeLists.txt", 14))
                 continue;
-            if (d_name_len >= 6 && !memcmp(e->d_name + d_name_len - 6, ".cmake", 6))
+            if (d_name_len >= 6 && !memcmp(d_name + d_name_len - 6, ".cmake", 6))
                 continue;
         }
 
-        char buf[1024];
-        snprintf(buf, sizeof(buf), "%s%s%s", prefix, path, e->d_name);
+        const char* buf = lua_pushfstring(L, "%s%s%s", prefix, path, d_name);
 
-        unsigned long long file_size;
-        bool is_dir;
+        uint64_t fileSize;
+        bool isDir;
+        File_QueryInfo(L, buf, &isDir, &fileSize);
 
-      #ifndef _WIN32
-        struct stat st;
-        if (stat(buf, &st) < 0) {
-            fprintf(stderr, "can't stat \"%s\": %s\n", buf, strerror(errno));
-            closedir(it);
-            exit(1);
-        }
-        is_dir = S_ISDIR(st.st_mode);
-        file_size = st.st_size;
-      #else
-        WIN32_FILE_ATTRIBUTE_DATA data;
-        if (!GetFileAttributesEx(buf, GetFileExInfoStandard, &data)) {
-            fprintf(stderr, "can't stat \"%s\": %s\n", buf, strerror(errno));
-            closedir(it);
-            exit(1);
-        }
-        is_dir = (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-        file_size = ((uint64_t)data.nFileSizeHigh << 32) | data.nFileSizeLow;
-      #endif
-
-        if (is_dir) {
+        if (isDir) {
             if (recursive != NON_RECURSIVE) {
-                const lua_dir* subdir;
-                if (recursive == RECURSIVE_FLAT || recursive == RECURSIVE_FLAT_SKIP_CMAKE)
+                int top2 = lua_gettop(L);
+
+                const DiskDir* subdir;
+                int subdirIndex;
+
+                if (recursive == RECURSIVE_FLAT || recursive == RECURSIVE_FLAT_SKIP_CMAKE) {
                     subdir = d;
-                else {
-                    char metafile[1032];
-                    sprintf(metafile, "%s/[meta]", buf);
-
+                    subdirIndex = dirIndex;
+                } else {
                     ext2_meta meta;
-                    read_meta_file(EXT2_TYPE_DIRECTORY | 0755, metafile, &meta);
-                    if ((meta.type_and_perm & EXT2_TYPE_MASK) != EXT2_TYPE_DIRECTORY) {
-                        fprintf(stderr, "invalid meta file for directory: %s\n", metafile);
-                        exit(1);
-                    }
-
-                    subdir = make_dir(L, d, dirIndex, e->d_name, &meta);
+                    MkDisk_ReadMetaFileForDirectory(dsk, buf, &meta);
+                    subdir = MkDisk_PushMakeDir(dsk, d, dirIndex, d_name, &meta);
+                    subdirIndex = lua_gettop(L);
                 }
-                snprintf(buf, sizeof(buf), "%s%s/", path, e->d_name);
-                scan_dir(L, prefix, subdir, lua_gettop(L), buf, recursive);
-            }
-        } else if (!g_skip_mkdisk) {
-            if (g_use_ext2) {
-                // ignore files ending with '[meta]'
-                size_t len = strlen(e->d_name);
-                if (len >= 5 && !memcmp(e->d_name + len - 6, "[meta]", 6))
-                    continue;
-            }
 
-            fputc('+', stdout);
-            fflush(stdout);
-            //printf("%s", buf);
+                const char* subname = lua_pushfstring(L, "%s%s/", path, d_name);
+                MkDisk_ScanDir(dsk, prefix, subdir, subdirIndex, subname, recursive);
 
-            add_file(L, d, e->d_name, buf, &file_size);
+                lua_settop(L, top2);
+            }
+        } else {
+            /* ignore files ending with '[meta]' */
+            size_t len = strlen(d_name);
+            if (len >= 5 && !memcmp(d_name + len - 6, "[meta]", 6))
+                continue;
+
+            Con_Print(L, COLOR_PROGRESS, "+");
+            Con_Flush(L);
+
+            MkDisk_AddFile(dsk, d, d_name, buf, &fileSize);
         }
+
+        lua_pop(L, 1);
     }
 
-    closedir(it);
+    File_CloseDir(it);
+    lua_settop(L, top);
 }
 
 /****************************************************************************/
 
-static int mkdisk_init(lua_State* L)
-{
-    const char* size = luaL_checkstring(L, 1);
-    const char* boot = luaL_checkstring(L, 2);
-
-    if (written) {
-        initialized = false;
-        written = false;
-    } else if (initialized)
-        return luaL_error(L, "init(): already initialized.");
-
-    if (!strcmp(size, "3m"))
-        disk_config = &disk_3M;
-    else if (!strcmp(size, "20m"))
-        disk_config = &disk_20M;
-    else if (!strcmp(size, "100m"))
-        disk_config = &disk_100M;
-    else if (!strcmp(size, "400m"))
-        disk_config = &disk_400M;
-    else if (!strcmp(size, "500m"))
-        disk_config = &disk_500M;
-    else if (!strcmp(size, "510m"))
-        disk_config = &disk_510M;
-    else if (!strcmp(size, "520m"))
-        disk_config = &disk_520M;
-    else if (!strcmp(size, "1g"))
-        disk_config = &disk_1G;
-    else
-        return luaL_error(L, "init(): invalid disk size.");
-
-    g_use_ext2 = !strcmp(boot, "ext2") || !strcmp(boot, "ext2;mbr=fat"); // done here for mbr_init()
-    g_mbr_fat = !strcmp(boot, "ext2;mbr=fat");
-
-    vhd_init();
-    mbr_init(vhd_sector(0));
-
-    if (!strcmp(boot, "fat16"))
-        fat_init(bootCodeNone);
-    else if (!strcmp(boot, "fat16-win95"))
-        fat_init(bootCode95);
-    else if (!strcmp(boot, "fat16-nt3.1"))
-        fat_init(bootCodeNT);
-    else if (!strcmp(boot, "ext2"))
-        ext2_init();
-    else if (!strcmp(boot, "ext2;mbr=fat"))
-        ext2_init();
-    else
-        return luaL_error(L, "init(): invalid filesystem ID.");
-
-    lua_newtable(L);
-    lua_pushvalue(L, -1);
-    lua_rawsetp(L, LUA_REGISTRYINDEX, &lua_DIR);
-
-    if (g_use_ext2)
-        push_directory(L, ext2_root_directory(), lua_absindex(L, -1), "/", "/", "");
-    else
-        push_directory(L, fat_root_directory(), lua_absindex(L, -1), "/", "/", "");
-    lua_pop(L, 1);
-
-    lua_setglobal(L, "DIR");
-
-    initialized = true;
-    return 0;
-}
-
 static int mkdisk_enable_lfn(lua_State* L)
 {
-    DONT_WARN_UNUSED(L);
-    fat_enable_lfn = true;
+    Disk* dsk = (Disk*)luaL_checkudata(L, 1, CLASS_DISK);
+    dsk->fatEnableLFN = true;
     return 0;
 }
 
 static int mkdisk_add_directory(lua_State* L)
 {
-    size_t src_dir_len;
-    const lua_dir* dst_dir = get_directory(L, 1);
-    const char* src_dir = luaL_checklstring(L, 2, &src_dir_len);
-    const char* recurse = luaL_optstring(L, 3, "recursive");
+    size_t srcDirLen;
+    Disk* dsk = (Disk*)luaL_checkudata(L, 1, CLASS_DISK);
+    const int dstDirIndex = 2;
+    const DiskDir* dstDir = MkDisk_GetDirectory(L, dstDirIndex);
+    const int srcDirIndex = 3;
+    const char* srcDir = luaL_checklstring(L, srcDirIndex, &srcDirLen);
+    const char* recurse = luaL_optstring(L, 4, "recursive");
 
-    if (!initialized)
-        return luaL_error(L, "add_directory(): not initialized.");
-    if (written)
+    if (dstDir->disk != dsk)
+        luaL_error(L, "dstDir disk mismatch!");
+    if (dsk->built)
         return luaL_error(L, "add_directory(): already finished.");
-
-    luaL_argcheck(L, dst_dir != NULL, 1, "directory expected");
 
     recursive_t recursive;
     if (!strcmp(recurse, "recursive"))
@@ -482,116 +405,100 @@ static int mkdisk_add_directory(lua_State* L)
     else
         return luaL_error(L, "add_directory(): invalid recursive mode.");
 
-    if (!g_skip_mkdisk)
-        printf("\n%s => %s\n[", src_dir, dst_dir->path);
+    Con_PrintF(L, COLOR_STATUS, "\n%s => %s\n", srcDir, dstDir->path);
+    Con_Print(L, COLOR_PROGRESS_SIDE, "[");
 
-    // append trailing '/'
-    if (src_dir[src_dir_len] != '/') {
-        lua_pushvalue(L, 2);
+    /* append trailing '/' */
+    if (srcDir[srcDirLen] != '/') {
+        lua_pushvalue(L, srcDirIndex);
         lua_pushliteral(L, "/");
         lua_concat(L, 2);
-        src_dir = lua_tolstring(L, -1, &src_dir_len);
+        srcDir = lua_tolstring(L, -1, &srcDirLen);
     }
 
-    luaL_checkstack(L, 1000, "scan_dir");
-    scan_dir(L, src_dir, dst_dir, 1, "", recursive);
+    luaL_checkstack(L, 1000, "MkDisk_ScanDir");
+    MkDisk_ScanDir(dsk, srcDir, dstDir, dstDirIndex, "", recursive);
 
-    if (!g_skip_mkdisk)
-        printf("]\n");
+    Con_Print(L, COLOR_PROGRESS_SIDE, "]\n");
 
     return 0;
 }
 
 static int mkdisk_make_directory(lua_State* L)
 {
-    const lua_dir* dst_dir = get_directory(L, 1);
-    const char* name = luaL_checkstring(L, 2);
+    Disk* dsk = (Disk*)luaL_checkudata(L, 1, CLASS_DISK);
+    const DiskDir* dstDir = MkDisk_GetDirectory(L, 2);
+    const char* name = luaL_checkstring(L, 3);
 
-    if (!initialized)
-        return luaL_error(L, "make_directory(): not initialized.");
-    if (written)
+    if (dstDir->disk != dsk)
+        luaL_error(L, "dstDir disk mismatch!");
+    if (dsk->built)
         return luaL_error(L, "make_directory(): already finished.");
-
-    luaL_argcheck(L, dst_dir != NULL, 1, "directory expected");
 
     ext2_meta meta;
     meta.type_and_perm = EXT2_TYPE_DIRECTORY | 0755;
     meta.uid = 0;
     meta.gid = 0;
+    MkDisk_PushMakeDir(dsk, dstDir, 1, name, &meta);
 
-    make_dir(L, dst_dir, 1, name, &meta);
     return 1;
 }
 
 static int mkdisk_add_file(lua_State* L)
 {
-    const lua_dir* dst_dir = get_directory(L, 1);
-    const char* name = luaL_checkstring(L, 2);
-    const char* srcPath = luaL_checkstring(L, 3);
+    Disk* dsk = (Disk*)luaL_checkudata(L, 1, CLASS_DISK);
+    const DiskDir* dstDir = MkDisk_GetDirectory(L, 2);
+    const char* name = luaL_checkstring(L, 3);
+    const char* srcPath = luaL_checkstring(L, 4);
 
-    if (!initialized)
-        return luaL_error(L, "add_file(): not initialized.");
-    if (written)
+    if (dstDir->disk != dsk)
+        luaL_error(L, "dstDir disk mismatch!");
+    if (dsk->built)
         return luaL_error(L, "add_file(): already finished.");
 
-    luaL_argcheck(L, dst_dir != NULL, 1, "directory expected");
-
-    if (!g_skip_mkdisk)
-        add_file(L, dst_dir, name, srcPath, NULL);
-
-    return 1;
+    MkDisk_AddFile(dsk, dstDir, name, srcPath, NULL);
+    return 0;
 }
 
 static int mkdisk_add_file_content(lua_State* L)
 {
     size_t contentLen = 0;
-    const lua_dir* dst_dir = get_directory(L, 1);
-    const char* name = luaL_checkstring(L, 2);
-    const char* content = luaL_checklstring(L, 3, &contentLen);
+    Disk* dsk = (Disk*)luaL_checkudata(L, 1, CLASS_DISK);
+    const DiskDir* dstDir = MkDisk_GetDirectory(L, 2);
+    const char* name = luaL_checkstring(L, 3);
+    const char* content = luaL_checklstring(L, 4, &contentLen);
 
-    if (!initialized)
-        return luaL_error(L, "add_file_content(): not initialized.");
-    if (written)
+    if (dstDir->disk != dsk)
+        luaL_error(L, "dstDir disk mismatch!");
+    if (dsk->built)
         return luaL_error(L, "add_file_content(): already finished.");
 
-    luaL_argcheck(L, dst_dir != NULL, 1, "directory expected");
-
-    if (!g_skip_mkdisk)
-        add_file_content(L, dst_dir, name, content, contentLen);
-
-    return 1;
+    MkDisk_AddFileContent(dsk, dstDir, name, content, contentLen);
+    return 0;
 }
 
 static int mkdisk_write_vhd(lua_State* L)
 {
-    const char* vhd_name = luaL_checkstring(L, 1);
+    Disk* dsk = (Disk*)luaL_checkudata(L, 1, CLASS_DISK);
+    const char* vhd_name = luaL_checkstring(L, 2);
 
-    if (!initialized)
-        return luaL_error(L, "write_vhd(): not initialized.");
-    if (written)
-        return luaL_error(L, "write_vhd(): already finished.");
-
-    if (!g_skip_mkdisk) {
-        if (g_use_ext2)
-            ext2_write();
-        else
-            fat_write();
-        VHD_Write(L, vhd_name);
+    if (!dsk->built) {
+        switch (dsk->fs) {
+            case FS_FAT: Fat_Write(dsk); break;
+            case FS_EXT2: Ext2_Write(dsk); break;
+        }
+        dsk->built = true;
     }
 
-    written = true;
+    VHD_Write(dsk, vhd_name);
     return 0;
 }
 
 static int mkdisk_write_img(lua_State* L)
 {
-    const char* img_name = luaL_checkstring(L, 1);
-    const char* mode = luaL_optstring(L, 2, "mbr");
-
-    if (!initialized)
-        return luaL_error(L, "write_img(): not initialized.");
-    if (written)
-        return luaL_error(L, "write_img(): already finished.");
+    Disk* dsk = (Disk*)luaL_checkudata(L, 1, CLASS_DISK);
+    const char* img_name = luaL_checkstring(L, 2);
+    const char* mode = luaL_optstring(L, 3, "mbr");
 
     bool mbr;
     if (!strcmp(mode, "mbr"))
@@ -601,28 +508,21 @@ static int mkdisk_write_img(lua_State* L)
     else
         return luaL_error(L, "invalid img write mode: %s", mode);
 
-    if (!g_skip_mkdisk) {
-        if (g_use_ext2)
-            ext2_write();
-        else
-            fat_write();
-        VHD_WriteAsIMG(L, img_name, mbr);
+    if (!dsk->built) {
+        switch (dsk->fs) {
+            case FS_FAT: Fat_Write(dsk); break;
+            case FS_EXT2: Ext2_Write(dsk); break;
+        }
+        dsk->built = true;
     }
 
-    written = true;
+    VHD_WriteAsIMG(dsk, img_name, mbr);
     return 0;
 }
 
-static int dir_tostring(lua_State* L)
-{
-    const lua_dir* d = get_directory(L, 1);
-    luaL_argcheck(L, d != NULL, 1, "directory expected");
-    lua_pushstring(L, d->path);
-    return 1;
-}
+/****************************************************************************/
 
-static const luaL_Reg funcs[] = {
-    { "init", mkdisk_init },
+static const luaL_Reg disk_funcs[] = {
     { "enable_lfn", mkdisk_enable_lfn },
     { "add_directory", mkdisk_add_directory },
     { "make_directory", mkdisk_make_directory },
@@ -633,6 +533,101 @@ static const luaL_Reg funcs[] = {
     { NULL, NULL }
 };
 
+static int mkdisk_create(lua_State* L)
+{
+    const char* size = luaL_checkstring(L, 1);
+    const char* boot = luaL_checkstring(L, 2);
+
+    Disk* dsk = (Disk*)lua_newuserdatauv(L, sizeof(Disk), 1);
+    luaL_setmetatable(L, CLASS_DISK);
+    int resultIdx = lua_gettop(L);
+
+    dsk->L = L;
+    dsk->mbrFAT = false;
+    dsk->fatEnableLFN = false;
+    dsk->built = false;
+
+    if (!strcmp(size, "3m"))
+        dsk->config = &disk_3M;
+    else if (!strcmp(size, "20m"))
+        dsk->config = &disk_20M;
+    else if (!strcmp(size, "100m"))
+        dsk->config = &disk_100M;
+    else if (!strcmp(size, "400m"))
+        dsk->config = &disk_400M;
+    else if (!strcmp(size, "500m"))
+        dsk->config = &disk_500M;
+    else if (!strcmp(size, "510m"))
+        dsk->config = &disk_510M;
+    else if (!strcmp(size, "520m"))
+        dsk->config = &disk_520M;
+    else if (!strcmp(size, "1g"))
+        dsk->config = &disk_1G;
+    else
+        return luaL_error(L, "disk:create(): invalid disk size.");
+
+    const uint8_t* bootCode = NULL;
+    if (!strcmp(boot, "fat16"))
+        dsk->fs = FS_FAT, bootCode = bootCodeNone;
+    else if (!strcmp(boot, "fat16-win95"))
+        dsk->fs = FS_FAT, bootCode = bootCode95;
+    else if (!strcmp(boot, "fat16-nt3.1"))
+        dsk->fs = FS_FAT, bootCode = bootCodeNT;
+    else if (!strcmp(boot, "ext2"))
+        dsk->fs = FS_EXT2;
+    else if (!strcmp(boot, "ext2;mbr=fat"))
+        dsk->fs = FS_EXT2, dsk->mbrFAT = true;
+    else
+        return luaL_error(L, "init(): invalid filesystem ID.");
+
+    VHD_Init(dsk);
+    MBR_Init(dsk, VHD_Sector(dsk, 0));
+
+    lua_settop(L, resultIdx);
+
+    lua_newtable(L);
+    lua_pushvalue(L, -1);
+    lua_setiuservalue(L, resultIdx, 1);
+
+    FSDir* root = NULL;
+    switch (dsk->fs) {
+        case FS_FAT: Fat_Init(dsk, bootCode, &root); break;
+        case FS_EXT2: Ext2_Init(dsk, &root); break;
+    }
+    MkDisk_PushDirectory(dsk, root, lua_absindex(L, -1), "/", "/", "");
+    lua_pop(L, 1);
+
+    return 2;
+}
+
+/****************************************************************************/
+
+static const luaL_Reg funcs[] = {
+    { "create", mkdisk_create },
+    { "enable_lfn", mkdisk_enable_lfn },
+    { "add_directory", mkdisk_add_directory },
+    { "make_directory", mkdisk_make_directory },
+    { "add_file", mkdisk_add_file },
+    { "add_file_content", mkdisk_add_file_content },
+    { "write_vhd", mkdisk_write_vhd },
+    { "write_img", mkdisk_write_img },
+    { NULL, NULL }
+};
+
+static int dir_tostring(lua_State* L)
+{
+    const DiskDir* d = MkDisk_GetDirectory(L, 1);
+    lua_pushstring(L, d->path);
+    return 1;
+}
+
+static int disk_tostring(lua_State* L)
+{
+    const Disk* dsk = (Disk*)luaL_checkudata(L, 1, CLASS_DISK);
+    lua_pushstring(L, "<Disk*>");
+    return 1;
+}
+
 static int luaopen_mkdisk(lua_State* L)
 {
     luaL_newmetatable(L, CLASS_DIRECTORY);
@@ -641,8 +636,12 @@ static int luaopen_mkdisk(lua_State* L)
     lua_pushcfunction(L, dir_tostring);
     lua_setfield(L, -2, "__tostring");
 
-    lua_pushboolean(L, g_skip_mkdisk);
-    lua_setglobal(L, "skip_boot");
+    luaL_newmetatable(L, CLASS_DISK);
+    lua_pushvalue(L, -1);
+    lua_setfield(L, -2, "__index");
+    lua_pushcfunction(L, disk_tostring);
+    lua_setfield(L, -2, "__tostring");
+    luaL_setfuncs(L, disk_funcs, 0);
 
     luaL_newlib(L, funcs);
     return 1;

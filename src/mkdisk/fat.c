@@ -1,7 +1,7 @@
-#include <common/common.h>
 #ifdef NDEBUG
 #undef NDEBUG
 #endif
+#include <common/common.h>
 #include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -27,24 +27,25 @@
 
 #define MAX_DIR_ENTRIES 16384
 
-struct dir {
-    struct dir* next;
-    struct dir* parent;
+struct FSDir {
+    struct FSDir* next;
+    struct FSDir* parent;
+    Disk* disk;
     size_t parentIndex;
     size_t entryCount;
     uint16_t cluster;
     fat_direntry entries[MAX_DIR_ENTRIES];
 };
 
-bool fat_enable_lfn;
-
 static size_t fatSize;
 static uint16_t* fat;
-static dir root_dir;
-static dir* last_dir;
+static FSDir root_dir;
+static FSDir* last_dir;
 
-void fat_init(const uint8_t* bootCode)
+void Fat_Init(Disk* dsk, const uint8_t* bootCode, FSDir** outRoot)
 {
+    const disk_config_t* disk_config = dsk->config;
+
     if (sizeof(fat_bootsector) != VHD_SECTOR_SIZE) {
         fprintf(stderr, "invalid boot sector size (%lu) - expected %lu.\n",
             (unsigned long)sizeof(fat_bootsector), (unsigned long)VHD_SECTOR_SIZE);
@@ -58,7 +59,7 @@ void fat_init(const uint8_t* bootCode)
         exit(1);
     }
 
-    fat_bootsector* p = (fat_bootsector*)vhd_sector(MBR_DISK_START);
+    fat_bootsector* p = (fat_bootsector*)VHD_Sector(dsk, MBR_DISK_START);
     if (bootCode) {
         p->jump[0] = bootCode[0];
         p->jump[1] = bootCode[1];
@@ -89,12 +90,9 @@ void fat_init(const uint8_t* bootCode)
     fat[1] = 0xFFFF;
 
     memset(&root_dir, 0, sizeof(root_dir));
+    root_dir.disk = dsk; /* FIXME */
     last_dir = &root_dir;
-}
-
-dir* fat_root_directory()
-{
-    return &root_dir;
+    *outRoot = &root_dir;
 }
 
 #define IS_LFN(ch) \
@@ -180,9 +178,9 @@ void fat_normalize_name(char* dst, const char* name)
     *dst = 0;
 }
 
-static bool fat_write_lfn(dir* parent, const char* name)
+static bool fat_write_lfn(FSDir* parent, const char* name)
 {
-    if (!fat_enable_lfn)// || !is_lfn(name))
+    if (!parent->disk->fatEnableLFN) /* || !is_lfn(name)) */
         return false;
 
     fat_direntry shrt;
@@ -251,13 +249,15 @@ static bool fat_write_lfn(dir* parent, const char* name)
     return true;
 }
 
-dir* fat_create_directory(dir* parent, const char* name)
+FSDir* fat_create_directory(FSDir* parent, const char* name)
 {
-    dir* d = (dir*)calloc(1, sizeof(dir));
+    FSDir* d = (FSDir*)calloc(1, sizeof(FSDir));
     if (!d) {
         fprintf(stderr, "memory allocation failed.\n");
         exit(1);
     }
+
+    d->disk = parent->disk;
 
     if (parent->entryCount >= MAX_DIR_ENTRIES) {
         fprintf(stderr, "too many directory entries!\n");
@@ -285,8 +285,10 @@ dir* fat_create_directory(dir* parent, const char* name)
     return d;
 }
 
-static uint16_t alloc_cluster(uint16_t start)
+static uint16_t alloc_cluster(Disk* dsk, uint16_t start)
 {
+    const disk_config_t* disk_config = dsk->config;
+
     for (size_t i = start; i < (size_t)FAT_SIZE; i++) {
         if (fat[i] == 0)
             return (uint16_t)i;
@@ -296,8 +298,10 @@ static uint16_t alloc_cluster(uint16_t start)
     exit(1);
 }
 
-static void alloc_file(uint16_t cluster, size_t size)
+static void alloc_file(Disk* dsk, uint16_t cluster, size_t size)
 {
+    const disk_config_t* disk_config = dsk->config;
+
     for (;;) {
         size_t srcSize = (size > (size_t)CLUSTER_SIZE ? (size_t)CLUSTER_SIZE : size);
 
@@ -307,21 +311,22 @@ static void alloc_file(uint16_t cluster, size_t size)
         if (size == 0)
             break;
 
-        uint16_t nextCluster = alloc_cluster(cluster);
+        uint16_t nextCluster = alloc_cluster(dsk, cluster);
         fat[cluster] = nextCluster;
         cluster = nextCluster;
     }
 }
 
-static void write_file(uint16_t cluster, const void* data, size_t size)
+static void write_file(Disk* dsk, uint16_t cluster, const void* data, size_t size)
 {
+    const disk_config_t* disk_config = dsk->config;
     const uint8_t* src = (const uint8_t*)data;
 
     if (size > 0) {
         for (;;) {
             size_t srcSize = (size > (size_t)CLUSTER_SIZE ? (size_t)CLUSTER_SIZE : size);
 
-            vhd_write_sectors(MBR_DISK_START + 1 + SECTORS_PER_FAT * 2 + ROOT_DIR_SECTORS +
+            VHD_WriteSectors(dsk, MBR_DISK_START + 1 + SECTORS_PER_FAT * 2 + ROOT_DIR_SECTORS +
                 (cluster - 2) * SECTORS_PER_CLUSTER, src, srcSize);
 
             size -= srcSize;
@@ -340,8 +345,10 @@ static void write_file(uint16_t cluster, const void* data, size_t size)
     }
 }
 
-void fat_add_file(dir* parent, const char* name, const void* data, size_t size)
+void fat_add_file(FSDir* parent, const char* name, const void* data, size_t size)
 {
+    Disk* dsk = parent->disk;
+
     if (parent->entryCount >= MAX_DIR_ENTRIES) {
         fprintf(stderr, "too many directory entries!\n");
         exit(1);
@@ -351,9 +358,9 @@ void fat_add_file(dir* parent, const char* name, const void* data, size_t size)
     if (size == 0)
         cluster = 0;
     else {
-        cluster = alloc_cluster(2);
-        alloc_file(cluster, size);
-        write_file(cluster, data, size);
+        cluster = alloc_cluster(dsk, 2);
+        alloc_file(dsk, cluster, size);
+        write_file(dsk, cluster, data, size);
     }
 
     fat_write_lfn(parent, name);
@@ -365,21 +372,23 @@ void fat_add_file(dir* parent, const char* name, const void* data, size_t size)
     parent->entries[index].size = size;
 }
 
-void fat_write()
+void Fat_Write(Disk* dsk)
 {
-    for (dir* p = root_dir.next; p; p = p->next) {
-        p->cluster = alloc_cluster(2);
+    const disk_config_t* disk_config = dsk->config;
+
+    for (FSDir* p = root_dir.next; p; p = p->next) {
+        p->cluster = alloc_cluster(dsk, 2);
         p->entries[0].firstCluster = p->cluster;
         p->parent->entries[p->parentIndex].firstCluster = p->cluster;
-        alloc_file(p->cluster, p->entryCount * sizeof(fat_direntry));
+        alloc_file(dsk, p->cluster, p->entryCount * sizeof(fat_direntry));
     }
 
-    for (dir* p = root_dir.next; p; p = p->next) {
+    for (FSDir* p = root_dir.next; p; p = p->next) {
         p->entries[1].firstCluster = p->parent->cluster;
-        write_file(p->cluster, p->entries, p->entryCount * sizeof(fat_direntry));
+        write_file(dsk, p->cluster, p->entries, p->entryCount * sizeof(fat_direntry));
     }
 
-    vhd_write_sectors(MBR_DISK_START + 1, fat, fatSize * sizeof(uint16_t));
-    vhd_write_sectors(MBR_DISK_START + 1 + SECTORS_PER_FAT, fat, fatSize * sizeof(uint16_t));
-    vhd_write_sectors(MBR_DISK_START + 1 + SECTORS_PER_FAT * 2, root_dir.entries, ROOT_DIR_SIZE);
+    VHD_WriteSectors(dsk, MBR_DISK_START + 1, fat, fatSize * sizeof(uint16_t));
+    VHD_WriteSectors(dsk, MBR_DISK_START + 1 + SECTORS_PER_FAT, fat, fatSize * sizeof(uint16_t));
+    VHD_WriteSectors(dsk, MBR_DISK_START + 1 + SECTORS_PER_FAT * 2, root_dir.entries, ROOT_DIR_SIZE);
 }

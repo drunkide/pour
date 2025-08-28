@@ -39,19 +39,29 @@ static const uint8_t mbrCode[MBR_CODE_SIZE + 6] = {
         0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x73,0x73,0x65,0xE3,0x3F,0xBF,
     };
 
-void mbr_init(void* dst)
+void MBR_Init(Disk* dsk, void* dst)
 {
+    const disk_config_t* disk_config = dsk->config;
+
     mbr* p = (mbr*)dst;
-    memcpy(p->code, mbrCode, MBR_CODE_SIZE + 6); // this also overrides diskID and reserved
+    memcpy(p->code, mbrCode, MBR_CODE_SIZE + 6); /* this also overrides diskID and reserved fields */
+    p->mark = MBR_MARK;
+
     p->entries[0].attrib = ACTIVE;
+
     p->entries[0].chs_start[0] = 0x01;
     p->entries[0].chs_start[1] = 0x01;
     p->entries[0].chs_start[2] = 0x00;
-    p->entries[0].type = (g_use_ext2 && !g_mbr_fat ? 0x83 /* linux native */ : 6 /* FAT16 */);
+
+    switch (dsk->fs) {
+        case FS_FAT: p->entries[0].type = 6 /* FAT16 */;
+        case FS_EXT2: p->entries[0].type = (dsk->mbrFAT ? 6 /* FAT16 */ : 0x83 /* linux native */);
+    }
+
     p->entries[0].chs_end[0] = disk_config->mbr_chs_end_0;
     p->entries[0].chs_end[1] = disk_config->mbr_chs_end_1;
     p->entries[0].chs_end[2] = disk_config->mbr_chs_end_2;
+
     p->entries[0].lba_start = MBR_DISK_START;
     p->entries[0].lba_size = MBR_DISK_SIZE;
-    p->mark = MBR_MARK;
 }

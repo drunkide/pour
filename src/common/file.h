@@ -10,6 +10,7 @@ typedef enum openmode_t {
 } openmode_t;
 
 STRUCT(File);
+STRUCT(Dir);
 
 #define MAX_FILE_SIZE (0x5fffffff)
 
@@ -21,6 +22,12 @@ void File_PushCurrentDirectory(lua_State* L);
 void File_SetCurrentDirectory(lua_State* L, const char* path);
 
 bool File_TryDelete(lua_State* L, const char* path);
+
+void File_QueryInfo(lua_State* L, const char* path, bool* outIsDir, uint64_t* outSize);
+
+Dir* File_PushOpenDir(lua_State* L, const char* path);
+const char* File_ReadDir(Dir* dir);
+void File_CloseDir(Dir* dir);
 
 File* File_PushOpen(lua_State* L, const char* path, openmode_t mode);
 void File_Close(File* file);

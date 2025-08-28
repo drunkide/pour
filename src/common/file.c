@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <limits.h>
 #include <errno.h>
+#include <dirent.h>
 
 #ifndef _WIN32
 #include <unistd.h>
@@ -26,19 +27,6 @@
 #ifndef PATH_MAX
 #define PATH_MAX DIR_MAX
 #endif
-
-struct File
-{
-  #if defined(_WIN32) && !defined(USE_POSIX_IO)
-    HANDLE handle;
-  #else
-    FILE* handle;
-  #endif
-    lua_State* L;
-    char name[1]; /* should be the last field */
-};
-
-#define FILE_MT "File*"
 
 /********************************************************************************************************************/
 
@@ -171,7 +159,112 @@ bool File_TryDelete(lua_State* L, const char* path)
   #endif
 }
 
+void File_QueryInfo(lua_State* L, const char* path, bool* outIsDir, uint64_t* outSize)
+{
+  #ifdef _WIN32
+
+    const WCHAR* wpath = (const WCHAR*)Utf8_PushConvertToUtf16(L, path, NULL);
+
+    WIN32_FILE_ATTRIBUTE_DATA data;
+    if (!GetFileAttributesExW(wpath, GetFileExInfoStandard, &data))
+        luaL_error(L, "can't stat \"%s\" (code %p)\n", path, (void*)(size_t)GetLastError());
+
+    lua_pop(L, 1);
+
+    if (outIsDir)
+        *outIsDir = (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+    if (outSize)
+        *outSize = ((uint64_t)data.nFileSizeHigh << 32) | data.nFileSizeLow;
+
+  #else
+
+    struct stat st;
+    if (stat(path, &st) < 0)
+        luaL_error(L, "can't stat \"%s\": %s\n", path, strerror(errno));
+
+    if (outIsDir)
+        *outIsDir = S_ISDIR(st.st_mode);
+    if (outSize)
+        *outSize = st.st_size;
+
+  #endif
+}
+
 /********************************************************************************************************************/
+
+struct Dir
+{
+    DIR* handle;
+    lua_State* L;
+    char name[1]; /* should be the last field */
+};
+
+#define DIR_MT "Dir*"
+
+static int lua_closedir(lua_State* L)
+{
+    File_CloseDir((Dir*)lua_touserdata(L, 1));
+    return 0;
+}
+
+Dir* File_PushOpenDir(lua_State* L, const char* path)
+{
+    size_t nameLen = strlen(path) + 1;
+    Dir* dir = (Dir*)lua_newuserdatauv(L, offsetof(Dir, name) + nameLen, 0);
+    memcpy(dir->name, path, nameLen);
+    int n = lua_gettop(L);
+
+    dir->handle = NULL;
+    dir->L = L;
+
+    if (luaL_newmetatable(L, DIR_MT)) {
+        lua_pushcfunction(L, lua_closedir);
+        lua_setfield(L, -2, "__gc");
+    }
+    lua_setmetatable(L, n);
+
+    errno = 0;
+    dir->handle = opendir(path); /* FIXME: utf-8 */
+    if (!dir->handle)
+        luaL_error(L, "can't open dir \"%s\": %s\n", path, strerror(errno));
+
+    return dir;
+}
+
+void File_CloseDir(Dir* dir)
+{
+    if (dir->handle) {
+        closedir(dir->handle);
+        dir->handle = NULL;
+    }
+}
+
+const char* File_ReadDir(Dir* dir)
+{
+    errno = 0;
+    struct dirent* e = readdir(dir->handle);
+    if (!e) {
+        if (errno)
+            luaL_error(dir->L, "can't read dir \"%s\": %s\n", dir->name, strerror(errno));
+        return NULL;
+    }
+    return e->d_name;
+}
+
+/********************************************************************************************************************/
+
+struct File
+{
+  #if defined(_WIN32) && !defined(USE_POSIX_IO)
+    HANDLE handle;
+  #else
+    FILE* handle;
+  #endif
+    lua_State* L;
+    char name[1]; /* should be the last field */
+};
+
+#define FILE_MT "File*"
 
 static int lua_closefile(lua_State* L)
 {
@@ -229,7 +322,7 @@ File* File_PushOpen(lua_State* L, const char* path, openmode_t mode)
 
     file->handle = CreateFileW(wpath, dwDesiredAccess, FILE_SHARE_READ, NULL, dwCreationDisposition, dwFlags, NULL);
     if (file->handle == INVALID_HANDLE_VALUE)
-        luaL_error(L, "unable to %s file \"%s\" (code %p)", action, file, (void*)(size_t)GetLastError());
+        luaL_error(L, "unable to %s file \"%s\" (code %p)", action, file->name, (void*)(size_t)GetLastError());
 
   #else
 
@@ -256,7 +349,7 @@ File* File_PushOpen(lua_State* L, const char* path, openmode_t mode)
 
     file->handle = fopen(path, modstr);
     if (!file->handle)
-        luaL_error(L, "unable to %s file \"%s\": %s", action, file, strerror(errno));
+        luaL_error(L, "unable to %s file \"%s\": %s", action, file->name, strerror(errno));
 
   #endif
 
@@ -525,7 +618,8 @@ char* File_PushContents(lua_State* L, const char* path, size_t* outSize)
     File* file = File_PushOpen(L, path, FILE_OPEN_SEQUENTIAL_READ);
 
     size_t fileSize = File_GetSize(file);
-    char* buf = (char*)lua_newuserdatauv(L, fileSize, 0);
+    char* buf = (char*)lua_newuserdatauv(L, fileSize + 1, 0);
+    buf[fileSize] = 0;
 
     File_Read(file, buf, fileSize);
 

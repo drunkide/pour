@@ -3,17 +3,23 @@
 
 #include <common/common.h>
 
-STRUCT(dir);
+typedef enum fs_t {
+    FS_FAT,
+    FS_EXT2,
+} fs_t;
 
-STRUCT(lua_dir) {
-    const char* path;
-    dir* dir;
+struct disk_config_t;
+
+STRUCT(FSDir);
+
+STRUCT(Disk) {
+    lua_State* L;
+    const struct disk_config_t* config;
+    fs_t fs;
+    bool mbrFAT;
+    bool fatEnableLFN;
+    bool built;
 };
-
-extern bool g_use_ext2;
-extern bool g_mbr_fat;
-
-lua_dir* get_directory(lua_State* L, int index);
 
 void MkDisk_InitLua(lua_State* L);
 

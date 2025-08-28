@@ -1,12 +1,12 @@
 #ifndef MKDISK_VHD_H
 #define MKDISK_VHD_H
 
-#include <common/common.h>
+#include <mkdisk/mkdisk.h>
 
-void vhd_init(void);
-uint8_t* vhd_sector(size_t index);
-void vhd_write_sectors(size_t firstSector, const void* data, size_t size);
-void VHD_Write(lua_State* L, const char* file);
-void VHD_WriteAsIMG(lua_State* L, const char* file, bool includeMBR);
+void VHD_Init(Disk* dsk);
+uint8_t* VHD_Sector(Disk* dsk, size_t index);
+void VHD_WriteSectors(Disk* dsk, size_t firstSector, const void* data, size_t size);
+void VHD_Write(Disk* dsk, const char* file);
+void VHD_WriteAsIMG(Disk* dsk, const char* file, bool includeMBR);
 
 #endif
