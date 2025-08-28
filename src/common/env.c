@@ -11,16 +11,44 @@ const char* Env_PushGet(lua_State* L, const char* variable)
 {
   #ifdef _WIN32
 
+    DWORD dwError;
+
     const WCHAR* name16 = (const WCHAR*)Utf8_PushConvertToUtf16(L, variable, NULL);
 
-    WCHAR buf[32768];
+    WCHAR buf[256], *p;
     DWORD len = GetEnvironmentVariableW(name16, buf, sizeof(buf) / sizeof(buf[0]));
-    lua_pop(L, 1);
-
-    if (len == 0 || len > sizeof(buf) / sizeof(buf[0]))
+    if (len == 0) {
+        dwError = GetLastError();
+        lua_pop(L, 1);
+      failure:
+        if (dwError != ERROR_ENVVAR_NOT_FOUND) {
+            luaL_error(L, "error reading environment variable \"%s\" (code %p).",
+                variable, (void*)(size_t)dwError);
+        }
         return NULL;
+    }
 
-    return Utf8_PushConvertFromUtf16(L, buf);
+    p = buf;
+    if (len > sizeof(buf) / sizeof(buf[0])) {
+        p = (WCHAR*)lua_newuserdatauv(L, len * sizeof(WCHAR), 0);
+        len = GetEnvironmentVariableW(name16, p, len);
+        if (len == 0) {
+            dwError = GetLastError();
+            lua_pop(L, 2);
+            goto failure;
+        }
+    }
+
+    const char* result = Utf8_PushConvertFromUtf16(L, p);
+
+    if (p == buf)
+        lua_replace(L, -2);
+    else {
+        lua_replace(L, -3);
+        lua_pop(L, 1);
+    }
+
+    return result;
 
   #else
 
@@ -57,33 +85,20 @@ void Env_Set(lua_State* L, const char* variable, const char* value)
 
 void Env_PrependPath(lua_State* L, const char* path)
 {
-  #ifdef _WIN32
-
     int n = lua_gettop(L);
 
-    WCHAR src[32768]; /* maximum limit of an environment variable */
-    DWORD sz = GetEnvironmentVariableW(L"PATH", src, sizeof(src) / sizeof(src[0]));
-    if (!sz || sz > sizeof(src))
-        luaL_error(L, "unable to get PATH environment variable.");
-
     lua_pushstring(L, path);
+  #ifdef _WIN32
     lua_pushliteral(L, ";");
-    Utf8_PushConvertFromUtf16(L, src);
-    lua_concat(L, 3);
+  #else
+    lua_pushliteral(L, ":");
+  #endif
+    if (Env_PushGet(L, "PATH"))
+        lua_concat(L, 3);
+    else
+        lua_pop(L, 1);
 
-    size_t dstLen = 0;
-    const char* dst = lua_tolstring(L, -1, &dstLen);
-
-    const WCHAR* newPath = (const WCHAR*)Utf8_PushConvertToUtf16(L, dst, NULL);
-    if (!SetEnvironmentVariableW(L"PATH", newPath))
-        luaL_error(L, "unable to update PATH environment variable.");
+    Env_Set(L, "PATH", lua_tostring(L, -1));
 
     lua_settop(L, n);
-
-  #else
-
-    /* FIXME: not implemented */
-    luaL_error(L, "Env_PrependPath: not implemented on this platform.");
-
-  #endif
 }
