@@ -1,12 +1,8 @@
 #define WIN32_LEAN_AND_MEAN
-#define _WIN32_WINNT 0x500
+#define _WIN32_WINNT 0x400
 #include <windows.h>
 #include <stddef.h>
 #include <stdarg.h>
-
-#ifdef _MSC_VER
-#pragma intrinsic(memset)
-#endif
 
 #ifndef JOB_OBJECT_LIMIT_KILL_ON_CLOSE
 #define JOB_OBJECT_LIMIT_KILL_ON_CLOSE 0x2000
@@ -21,6 +17,17 @@ static const char POUR_EXE[] = "\\build\\mingw32\\pour.exe";
 
 /********************************************************************************************************************/
 
+typedef HANDLE (*PFNCREATEJOBOBJECTW)(LPSECURITY_ATTRIBUTES, LPWSTR);
+typedef BOOL (*PFNASSIGNPROCESSTOJOBOBJECT)(HANDLE, HANDLE);
+typedef BOOL (*PFNSETINFORMATIONJOBOBJECT)(HANDLE, JOBOBJECTINFOCLASS, LPVOID, DWORD);
+typedef BOOL (*PFNTERMINATEJOBOBJECT)(HANDLE, UINT);
+
+static PFNCREATEJOBOBJECTW pfnCreateJobObjectW;
+static PFNASSIGNPROCESSTOJOBOBJECT pfnAssignProcessToJobObject;
+static PFNSETINFORMATIONJOBOBJECT pfnSetInformationJobObject;
+static PFNTERMINATEJOBOBJECT pfnTerminateJobObject;
+
+static HANDLE hKernel32;
 static HANDLE hStdOut;
 static HANDLE hChildJob;
 static DWORD dwChildProcessId;
@@ -30,9 +37,15 @@ static BOOL is_console;
 static BOOL print_before_pour;
 static WORD default_color;
 static CRITICAL_SECTION critical_section;
+static JOBOBJECT_BASIC_LIMIT_INFORMATION jbli;
+static STARTUPINFO si;
+static PROCESS_INFORMATION pi;
 
 /********************************************************************************************************************/
 
+#ifndef _MSC_VER
+#define copybytes memcpy
+#else
 static void copybytes(void* dst, const void* src, size_t size)
 {
     char* d = (char*)dst;
@@ -40,6 +53,7 @@ static void copybytes(void* dst, const void* src, size_t size)
     while (size--)
         *d++ = *s++;
 }
+#endif
 
 static TCHAR* mycpy(TCHAR* dst, const char* src)
 {
@@ -51,7 +65,7 @@ static TCHAR* mycpy(TCHAR* dst, const char* src)
 static TCHAR* mywcpy(TCHAR* dst, const TCHAR* src)
 {
     while (*src)
-        *dst++ = (TCHAR)*src++;
+        *dst++ = *src++;
     return dst;
 }
 
@@ -129,19 +143,21 @@ static void con_printW(WORD color, const TCHAR* str, ptrdiff_t len)
 
 __declspec(noreturn) static void failed(const char* func)
 {
-    con_printfA(COLOR_ERROR, "ERROR: %s failed: 0x%08X.\n", func, GetLastError());
+    con_printfA(COLOR_ERROR, "%s%s: %08X.\n", "ERROR: ", func, GetLastError());
     ExitProcess(1);
+}
+
+static void setChildProcessId(DWORD id)
+{
+    con_begin(default_color);   /* instead of EnterCriticalSection(&critical_section); */
+    dwChildProcessId = id;
+    con_end();                  /* instead of LeaveCriticalSection(&critical_section); */
 }
 
 static void exec(const TCHAR* app, TCHAR* cmdline)
 {
     TCHAR cwd[MAX_PATH], cmd[MAX_PATH];
     DWORD dwExitCode = (DWORD)-1;
-    PROCESS_INFORMATION pi;
-    STARTUPINFO si;
-
-    ZeroMemory(&pi, sizeof(pi));
-    ZeroMemory(&si, sizeof(si));
 
     if (!app) {
         WCHAR* dst;
@@ -149,7 +165,7 @@ static void exec(const TCHAR* app, TCHAR* cmdline)
         dst = mywcpy(dst, cmdline);
         *dst++ = TEXT('\n');
         con_printW(COLOR_COMMAND, cmd, dst - cmd);
-        dst = mywcpy(cmd, TEXT("cmd /C "));
+        dst = mycpy(cmd, "cmd /C ");
         *mywcpy(dst, cmdline) = 0;
         cmdline = cmd;
     } else if (print_before_pour) {
@@ -163,27 +179,32 @@ static void exec(const TCHAR* app, TCHAR* cmdline)
     if (!CreateProcess(app, cmdline, NULL, NULL, TRUE, 0, NULL, cwd, &si, &pi))
         failed("CreateProcess");
 
-    AssignProcessToJobObject(hChildJob, pi.hProcess);
-
-    EnterCriticalSection(&critical_section);
-    dwChildProcessId = pi.dwProcessId;
-    LeaveCriticalSection(&critical_section);
+    if (hChildJob) {
+        pfnAssignProcessToJobObject(hChildJob, pi.hProcess);
+        setChildProcessId(pi.dwProcessId);
+    }
 
     WaitForSingleObject(pi.hProcess, INFINITE);
 
-    EnterCriticalSection(&critical_section);
-    dwChildProcessId = 0;
-    LeaveCriticalSection(&critical_section);
+    setChildProcessId(0);
 
     GetExitCodeProcess(pi.hProcess, &dwExitCode);
-    /*CloseHandle(pi.hThread); -- keep file size under 4K */
-    /*CloseHandle(pi.hProcess); -- keep file size under 4K */
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
 
     if (dwExitCode != 0) {
         if (!app && !ctrl_c)
-            con_printfA(COLOR_ERROR, "ERROR: command exited with code %u.\n", dwExitCode);
+            con_printfA(COLOR_ERROR, "%sexit code %u.\n", "ERROR: ", dwExitCode);
         ExitProcess(1);
     }
+
+    print_before_pour = TRUE;
+}
+
+static BOOL tryKill(DWORD ctrl)
+{
+    GenerateConsoleCtrlEvent(ctrl, dwChildProcessId);
+    return (WaitForSingleObject(hChildJob, 50) == WAIT_OBJECT_0);
 }
 
 static BOOL WINAPI ctrl_handler(DWORD ctrl)
@@ -191,20 +212,16 @@ static BOOL WINAPI ctrl_handler(DWORD ctrl)
     switch (ctrl) {
         case CTRL_C_EVENT:
         case CTRL_BREAK_EVENT:
-            EnterCriticalSection(&critical_section);
+            con_begin(COLOR_ERROR); /* instead of EnterCriticalSection(&critical_section); */
             if (dwChildProcessId) {
-                GenerateConsoleCtrlEvent(ctrl, dwChildProcessId);
-                if (WaitForSingleObject(hChildJob, 50) != WAIT_OBJECT_0) {
-                    GenerateConsoleCtrlEvent(ctrl, dwChildProcessId);
-                    if (WaitForSingleObject(hChildJob, 50) != WAIT_OBJECT_0) {
-                        TerminateJobObject(hChildJob, (DWORD)-1);
-                        WaitForSingleObject(hChildJob, INFINITE);
-                    }
+                if (!tryKill(ctrl) && !tryKill(ctrl)) {
+                    pfnTerminateJobObject(hChildJob, (DWORD)-1);
+                    WaitForSingleObject(hChildJob, INFINITE);
                 }
             }
-            con_printfA(COLOR_ERROR, "\n\n=== Ctrl+C ===\n\n");
+            //con_printfA(COLOR_ERROR, "\n\n=== Ctrl+C ===\n\n");
             ctrl_c = TRUE;
-            LeaveCriticalSection(&critical_section);
+            con_end(); /* instead of LeaveCriticalSection(&critical_section); */
             return FALSE;
         default:
             return FALSE;
@@ -213,19 +230,25 @@ static BOOL WINAPI ctrl_handler(DWORD ctrl)
 
 void entry(void)
 {
-    JOBOBJECT_BASIC_LIMIT_INFORMATION jbli;
-    TCHAR path[MAX_PATH], buf[1600];
+    static TCHAR path[MAX_PATH], buf[1600];
     LPTSTR pSlash;
 
     InitializeCriticalSection(&critical_section);
 
-    hChildJob = CreateJobObject(NULL, NULL);
-    if (!hChildJob)
-        failed("CreateJobObject");
+    hKernel32 = GetModuleHandleA("KERNEL32");
+    pfnCreateJobObjectW = (PFNCREATEJOBOBJECTW)GetProcAddress(hKernel32, "CreateJobObjectW");
+    pfnSetInformationJobObject = (PFNSETINFORMATIONJOBOBJECT)GetProcAddress(hKernel32, "SetInformationJobObject");
+    pfnAssignProcessToJobObject = (PFNASSIGNPROCESSTOJOBOBJECT)GetProcAddress(hKernel32, "AssignProcessToJobObject");
+    pfnTerminateJobObject = (PFNTERMINATEJOBOBJECT)GetProcAddress(hKernel32, "TerminateJobObject");
 
-    ZeroMemory(&jbli, sizeof(jbli));
-    jbli.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_CLOSE;
-    SetInformationJobObject(hChildJob, JobObjectBasicLimitInformation, &jbli, sizeof(jbli));
+    if (pfnCreateJobObjectW && pfnSetInformationJobObject && pfnAssignProcessToJobObject && pfnTerminateJobObject) {
+        hChildJob = pfnCreateJobObjectW(NULL, NULL);
+        if (!hChildJob)
+            failed("CreateJobObjectW");
+
+        jbli.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_CLOSE;
+        pfnSetInformationJobObject(hChildJob, JobObjectBasicLimitInformation, &jbli, sizeof(jbli));
+    }
 
     SetConsoleCtrlHandler(ctrl_handler, TRUE);
 
@@ -239,27 +262,27 @@ void entry(void)
         *mycpy(pSlash, "\\CMakeLists.txt") = 0;
         if (GetFileAttributes(path) == INVALID_FILE_ATTRIBUTES) {
             TCHAR* dst = mycpy(buf, "git clone https://github.com/thirdpartystuff/pour \"");
-            copybytes(dst, path, sizeof(TCHAR) * (size_t)(pSlash - path));
-            dst[pSlash - path] = 0;
+            size_t size = (size_t)(pSlash - path);
+            copybytes(dst, path, sizeof(TCHAR) * size);
+            dst += size;
+            *dst++ = '"';
+            *dst = 0;
             exec(NULL, buf);
-            print_before_pour = TRUE;
         }
 
         *mycpy(pSlash, POUR_EXE) = 0;
         if (GetFileAttributes(path) == INVALID_FILE_ATTRIBUTES) {
-            copybytes(buf, path, sizeof(TCHAR) * (size_t)(pSlash - path));
-            *mycpy(&buf[pSlash - path], "\\build_mingw.cmd") = 0;
+            size_t size = (size_t)(pSlash - path);
+            copybytes(buf, path, sizeof(TCHAR) * size);
+            *mycpy(buf + size, "\\build_mingw.cmd") = 0;
             exec(NULL, buf);
-            print_before_pour = TRUE;
         }
     }
 
     exec(path, GetCommandLine());
 
-    SetConsoleCtrlHandler(ctrl_handler, FALSE);
-
-    /*CloseHandle(hChildJob); -- keep file size under 4K */
-    /*DeleteCriticalSection(&critical_section); -- keep file size under 4K */
+    CloseHandle(hChildJob);
+    DeleteCriticalSection(&critical_section);
 
     ExitProcess(0);
 }
