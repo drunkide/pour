@@ -11,7 +11,9 @@
 #include <string.h>
 
 #define DEFAULT_EXECUTABLE_ID "_default_"
+
 char PACKAGE_DIR;
+char ARG;
 
 /********************************************************************************************************************/
 
@@ -29,7 +31,8 @@ static void getGlobal(Package* pkg, const char* name)
 {
     lua_State* L = pkg->L;
     lua_pushvalue(L, pkg->globalsTable);
-    lua_getfield(L, -1, name);
+    lua_pushstring(L, name);
+    lua_rawget(L, -2);
     lua_remove(L, -2);
 }
 
@@ -284,10 +287,40 @@ bool Pour_ExecScript(lua_State* L, const char* script, const char* chdir, int ar
 {
     int n = lua_gettop(L);
 
-    DONT_WARN_UNUSED(argc);
-    DONT_WARN_UNUSED(argv);
+    lua_newtable(L);
+    int globalsTableIdx = lua_gettop(L);
 
-    if (!Script_DoFile(L, script, chdir, 0)) {
+    lua_createtable(L, argc, argc);
+    for (int i = 1, idx = 1; i < argc; i++) {
+        const char* p = strchr(argv[i], '=');
+        if (p) {
+            lua_pushlstring(L, argv[i], p - argv[i]);
+
+            ++p;
+            if (*p != '{')
+                lua_pushstring(L, p);
+            else {
+                lua_pushfstring(L, "return %s", p);
+                if (luaL_loadstring(L, lua_tostring(L, -1)) != 0)
+                    luaL_error(L, "syntax error in expression: %s", p);
+                lua_remove(L, -2);
+                if (lua_pcall(L, 0, 1, 0))
+                    luaL_error(L, "error evaluating expression: %s", p);
+            }
+
+            lua_rawset(L, -3);
+            continue;
+        }
+
+        lua_pushstring(L, argv[i]);
+        lua_rawseti(L, -2, idx++);
+    }
+
+    lua_pushvalue(L, -1);
+    lua_rawsetp(L, LUA_REGISTRYINDEX, &ARG);
+    lua_setfield(L, globalsTableIdx, "arg");
+
+    if (!Script_DoFile(L, script, chdir, globalsTableIdx)) {
         lua_settop(L, n);
         return false;
     }

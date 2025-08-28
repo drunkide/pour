@@ -135,22 +135,33 @@ bool Script_DoFile(lua_State* L, const char* name, const char* chdir, int global
     Dir_FromNativeSeparators(path);
     Dir_RemoveLastPath(path);
 
-    if (globalsTableIdx != 0)           /* new _ENV */
+    if (globalsTableIdx != 0)                   /* new _ENV */
         lua_pushvalue(L, globalsTableIdx);
     else
         lua_newtable(L);
 
+    int envIndex = lua_gettop(L);
     lua_pushvalue(L, -1);
-    lua_setfield(L, -2, "_G");          /* _ENV._G = _ENV */
+    lua_setfield(L, envIndex, "_G");            /* _ENV._G = _ENV */
     lua_pushstring(L, path);
-    lua_setfield(L, -2, "SCRIPT_DIR");  /* _ENV.SCRIPT_DIR = <path> */
+    lua_setfield(L, envIndex, "SCRIPT_DIR");    /* _ENV.SCRIPT_DIR = <path> */
 
-    lua_newtable(L);                    /* metatable for new _ENV */
+    /* copy values from globals */
     lua_pushglobaltable(L);
-    lua_setfield(L, -2, "__index");
-    lua_pushboolean(L, 0);
-    lua_setfield(L, -2, "__metatable");
-    lua_setmetatable(L, -2);
+    int globalsIndex = lua_gettop(L);
+    lua_pushnil(L);
+    while (lua_next(L, globalsIndex)) {
+        lua_pushvalue(L, -2);
+        if (lua_rawget(L, envIndex) > LUA_TNIL)
+            lua_pop(L, 1); /* override exists, keep it */
+        else {
+            lua_pop(L, 1);
+            lua_pushvalue(L, -2);
+            lua_pushvalue(L, -2);
+            lua_rawset(L, envIndex);
+        }
+        lua_pop(L, 1);
+    }
 
     int status = report(L, luaL_loadfile(L, name)); /* FIXME: utf-8 */
     if (status != LUA_OK) {
@@ -161,8 +172,8 @@ bool Script_DoFile(lua_State* L, const char* name, const char* chdir, int global
     if (chdir)
         File_SetCurrentDirectory(L, chdir);
 
-    lua_pushvalue(L, -2);               /* new _ENV */
-    lua_setupvalue(L, -2, 1);           /* set as upvalue #1 for the script */
+    lua_pushvalue(L, envIndex);                 /* new _ENV */
+    lua_setupvalue(L, -2, 1);                   /* set as upvalue #1 for the script */
 
     status = report(L, docall(L, 0, 0));
 
