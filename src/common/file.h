@@ -31,6 +31,7 @@ void File_CloseDir(Dir* dir);
 
 File* File_PushOpen(lua_State* L, const char* path, openmode_t mode);
 void File_Close(File* file);
+void File_MakeSparse(File* file);
 size_t File_GetSize(File* file);
 bool File_TrySetSize(File* file, size_t newSize);
 void File_SetPosition(File* file, size_t offset);
@@ -39,6 +40,7 @@ void File_Write(File* file, const void* buf, size_t size);
 
 char* File_PushContents(lua_State* L, const char* path, size_t* outSize);
 void File_Overwrite(lua_State* L, const char* path, const void* data, size_t size);
+void File_OverwriteSparse(lua_State* L, const char* path, const void* data, size_t size);
 bool File_MaybeOverwrite(lua_State* L, const char* path, const void* newData, size_t newSize);
 
 #endif

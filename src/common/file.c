@@ -17,11 +17,22 @@
 #ifdef _WIN32
  #define WIN32_LEAN_AND_MEAN
  #include <windows.h>
+ #include <winioctl.h>
  #include <io.h>
  #ifndef __MINGW32__
   #define fileno _fileno
  #endif
  #define ftruncate _chsize
+ #ifndef FSCTL_SET_SPARSE
+  #define FSCTL_SET_SPARSE 0x000900C4
+ #endif
+ #ifndef FSCTL_SET_ZERO_DATA
+  #define FSCTL_SET_ZERO_DATA 0x000980C8
+ #endif
+ STRUCT(FILE_ZERO_DATA_INFORMATION_) {
+    LARGE_INTEGER FileOffset;
+    LARGE_INTEGER BeyondFinalZero;
+ };
 #endif
 
 #ifndef PATH_MAX
@@ -261,6 +272,7 @@ struct File
     FILE* handle;
   #endif
     lua_State* L;
+    bool isSparse;
     char name[1]; /* should be the last field */
 };
 
@@ -281,6 +293,7 @@ File* File_PushOpen(lua_State* L, const char* path, openmode_t mode)
 
     file->handle = NULL;
     file->L = L;
+    file->isSparse = false;
 
     if (luaL_newmetatable(L, FILE_MT)) {
         lua_pushcfunction(L, lua_closefile);
@@ -376,6 +389,19 @@ void File_Close(File* file)
     }
 
   #endif
+}
+
+void File_MakeSparse(File* file)
+{
+    DWORD tmp;
+    if (!DeviceIoControl(file->handle, FSCTL_SET_SPARSE, NULL, 0, NULL, 0, &tmp, NULL)) {
+        Con_PrintF(file->L, COLOR_WARNING,
+            "WARNING: DeviceIoControl(FSCTL_SET_SPARSE) failed for file \"%s\" (code %p).",
+            file->name, (void*)(size_t)GetLastError());
+        return;
+    }
+
+    file->isSparse = true;
 }
 
 size_t File_GetSize(File* file)
@@ -567,6 +593,17 @@ void File_Read(File* file, void* buf, size_t size)
   #endif
 }
 
+#if defined(_WIN32) && !defined(USE_POSIX_IO)
+#define SPARSE_THRESHOLD 1024
+static LONG countZeros(const char* start, const char* end)
+{
+    const char* p = start;
+    while (*p == 0 && p != end)
+        ++p;
+    return (LONG)(p - start);
+}
+#endif
+
 void File_Write(File* file, const void* buf, size_t size)
 {
     const char* ptr = (const char*)buf;
@@ -577,8 +614,70 @@ void File_Write(File* file, const void* buf, size_t size)
     HANDLE handle = file->handle;
 
     while (size != 0) {
+        DWORD dwBytesToWrite = (DWORD)size;
         DWORD dwBytesWritten;
-        if (!WriteFile(handle, ptr, (DWORD)size, &dwBytesWritten, NULL)) {
+
+        if (file->isSparse) {
+            const char* end = ptr + size;
+            LONG zeroCount = countZeros(ptr, end);
+            if (zeroCount >= SPARSE_THRESHOLD || (size_t)zeroCount == dwBytesToWrite) {
+                DWORD currentOffset = SetFilePointer(handle, 0, NULL, FILE_CURRENT);
+                if (currentOffset == INVALID_SET_FILE_POINTER) {
+                    Con_PrintF(L, COLOR_WARNING, "WARNING: SetFilePointer() failed in file \"%s\" (code %p)",
+                        file->name, (void*)(size_t)GetLastError());
+                    goto fullwrite;
+                }
+
+                FILE_ZERO_DATA_INFORMATION_ zi;
+                zi.FileOffset.QuadPart = currentOffset;
+                zi.BeyondFinalZero.QuadPart = currentOffset + zeroCount;
+                DWORD tmp = 0;
+                if (!DeviceIoControl(handle, FSCTL_SET_ZERO_DATA, &zi, sizeof(zi), NULL, 0, &tmp, NULL)) {
+                    Con_PrintF(L, COLOR_WARNING,
+                        "WARNING: DeviceIoControl(FSCTL_SET_ZERO_DATA) failed in file \"%s\" (code %p)",
+                        file->name, (void*)(size_t)GetLastError());
+                    goto fullwrite;
+                }
+
+                DWORD result = SetFilePointer(handle, currentOffset + zeroCount, NULL, FILE_BEGIN);
+                if (result == INVALID_SET_FILE_POINTER) {
+                    Con_PrintF(L, COLOR_WARNING, "WARNING: SetFilePointer() failed in file \"%s\" (code %p)",
+                        file->name, (void*)(size_t)GetLastError());
+                    goto fullwrite;
+                }
+
+                if (!SetEndOfFile(handle)) {
+                    Con_PrintF(L, COLOR_WARNING, "WARNING: SetEndOfFile() failed in file \"%s\" (code %p)",
+                        file->name, (void*)(size_t)GetLastError());
+                }
+
+                ptr += zeroCount;
+                size -= zeroCount;
+
+                if (ptr == end)
+                    break;
+            }
+
+            const char* p = ptr;
+            for (;;) {
+                while (*p != 0 && p != end)
+                    ++p;
+
+                if (p == end)
+                    break;
+
+                LONG zeroCount = countZeros(p, end);
+                if (zeroCount >= SPARSE_THRESHOLD || (size_t)zeroCount == dwBytesToWrite)
+                    break;
+
+                p += zeroCount;
+            }
+
+            dwBytesToWrite = (DWORD)(p - ptr);
+        }
+
+      fullwrite:
+        if (!WriteFile(handle, ptr, dwBytesToWrite, &dwBytesWritten, NULL)) {
             luaL_error(L, "unable to %s file \"%s\" (code %p)",
                 "write", file->name, (void*)(size_t)GetLastError());
         }
@@ -635,6 +734,15 @@ char* File_PushContents(lua_State* L, const char* path, size_t* outSize)
 void File_Overwrite(lua_State* L, const char* path, const void* data, size_t size)
 {
     File* file = File_PushOpen(L, path, FILE_CREATE_OVERWRITE);
+    File_Write(file, data, size);
+    File_Close(file);
+    lua_pop(L, 1);
+}
+
+void File_OverwriteSparse(lua_State* L, const char* path, const void* data, size_t size)
+{
+    File* file = File_PushOpen(L, path, FILE_CREATE_OVERWRITE);
+    File_MakeSparse(file);
     File_Write(file, data, size);
     File_Close(file);
     lua_pop(L, 1);

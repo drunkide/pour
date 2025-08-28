@@ -111,7 +111,7 @@ static void full_write_file(Write* wr)
     Con_PrintF(L, COLOR_STATUS, "%s disk file: ", (wr->oldBuffer ? "Overwriting" : "Writing"));
     Con_Flush(L);
 
-    File_Overwrite(L, wr->fileName, wr->newBuffer, wr->newSize);
+    File_OverwriteSparse(L, wr->fileName, wr->newBuffer, wr->newSize);
 
     Con_Print(L, COLOR_SUCCESS, "Done.\n");
     Con_PrintSeparator(L);
@@ -255,7 +255,7 @@ void Write_Commit(Write* wr)
 
     if (!try_load_existing_file(wr)) {
         full_write_file(wr);
-        return;
+        goto validate;
     }
 
     if (wr->oldSize == wr->newSize && !memcmp(wr->oldBuffer, wr->newBuffer, wr->newSize)) {
@@ -266,11 +266,12 @@ void Write_Commit(Write* wr)
     }
 
     File* file = File_PushOpen(L, wr->fileName, FILE_OPEN_MODIFY);
+    File_MakeSparse(file);
 
     if (wr->newSize < wr->oldSize) {
         if (!File_TrySetSize(file, wr->newSize)) {
             full_write_file(wr);
-            return;
+            goto validate;
         }
 
         wr->oldSize = wr->newSize;
@@ -279,5 +280,6 @@ void Write_Commit(Write* wr)
     partial_update_file(wr, file);
     File_Close(file);
 
+  validate:
     validate_written_file(wr);
 }
