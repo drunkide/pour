@@ -233,16 +233,22 @@ size_t File_GetSize(File* file)
 
   #if defined(_WIN32) && !defined(USE_POSIX_IO)
 
-    LARGE_INTEGER size;
-    if (!GetFileSizeEx(file->handle, &size)) {
-        luaL_error(L, "unable to %s file \"%s\" (code %p)",
-            "determine size of", file->name, (void*)(size_t)GetLastError());
+    SetLastError(NO_ERROR);
+
+    DWORD hiPart = 0;
+    DWORD loPart = GetFileSize(file->handle, &hiPart);
+    if (loPart == INVALID_FILE_SIZE) {
+        DWORD dwError = GetLastError();
+        if (dwError != NO_ERROR) {
+            luaL_error(L, "unable to %s file \"%s\" (code %p)",
+                "determine size of", file->name, (void*)(size_t)dwError);
+        }
     }
 
-    if (size.QuadPart > MAX_FILE_SIZE)
+    if (hiPart != 0 || loPart > MAX_FILE_SIZE)
         luaL_error(L, "file \"%s\" is too large.", file->name);
 
-    return (size_t)size.QuadPart;
+    return (size_t)loPart;
 
   #else
 
