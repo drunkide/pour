@@ -22,6 +22,7 @@
 #endif
 
 lua_State* gL;
+static volatile int g_inCall;
 
 /********************************************************************************************************************/
 
@@ -31,9 +32,20 @@ lua_State* gL;
 static void lstop(lua_State* L, lua_Debug* ar)
 {
     (void)ar;  /* unused arg. */
-    lua_sethook(L, NULL, 0, 0);  /* reset hook */
+    /*lua_sethook(L, NULL, 0, 0);*/  /* reset hook */
     luaL_error(L, "interrupted!");
 }
+
+void Script_Interrupt(void)
+{
+    if (!g_inCall)
+        return;
+
+    const int flag = LUA_MASKCALL | LUA_MASKRET | LUA_MASKLINE | LUA_MASKCOUNT;
+    lua_sethook(gL, lstop, flag, 1);
+}
+
+/********************************************************************************************************************/
 
 /*
 ** Function to be called at a C signal. Because a C signal cannot
@@ -43,9 +55,8 @@ static void lstop(lua_State* L, lua_Debug* ar)
 */
 static void laction(int i)
 {
-    int flag = LUA_MASKCALL | LUA_MASKRET | LUA_MASKLINE | LUA_MASKCOUNT;
     signal(i, SIG_DFL); /* if another SIGINT happens, terminate process */
-    lua_sethook(gL, lstop, flag, 1);
+    Script_Interrupt();
 }
 
 /*
@@ -89,9 +100,15 @@ static int docall(lua_State* L, int narg, int nres)
     int base = lua_gettop(L) - narg;  /* function index */
     lua_pushcfunction(L, msghandler);  /* push message handler */
     lua_insert(L, base);  /* put it under function and args */
-    signal(SIGINT, laction);  /* set C-signal handler */
+
+    if (g_inCall++ == 0)
+        signal(SIGINT, laction);  /* set C-signal handler */
+
     status = lua_pcall(L, narg, nres, base);
-    signal(SIGINT, SIG_DFL); /* reset C-signal handler */
+
+    if (--g_inCall == 0)
+        signal(SIGINT, SIG_DFL); /* reset C-signal handler */
+
     lua_remove(L, base);  /* remove message handler from the stack */
     return status;
 }

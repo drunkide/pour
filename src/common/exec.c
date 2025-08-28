@@ -42,8 +42,8 @@ static BOOL WINAPI Exec_CtrlHandler(DWORD ctrl)
                     }
                 }
             }
-            Con_PrintF(COLOR_ERROR, "\n\n=== Ctrl+C ===\n\n");
             g_ctrlC = TRUE;
+            Script_Interrupt();
             LeaveCriticalSection(&g_criticalSection);
             return FALSE;
         default:
