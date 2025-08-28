@@ -122,7 +122,7 @@ static int pmain(lua_State *L)
     LPWSTR* wargv = CommandLineToArgvW(GetCommandLineW(), &wargc);
     if (wargv) {
         params->argc = wargc;
-        params->argv = (char**)lua_newuserdata(L, sizeof(char*) * wargc);
+        params->argv = (char**)lua_newuserdatauv(L, sizeof(char*) * wargc, 0);
         for (int i = 0; i < wargc; i++) {
             params->argv[i] = (char*)Utf8_PushConvertFromUtf16(L, wargv[i]);
             luaL_ref(L, LUA_REGISTRYINDEX);

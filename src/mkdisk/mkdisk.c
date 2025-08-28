@@ -104,7 +104,7 @@ static lua_dir* push_directory(lua_State* L, dir* dir, int parentIndex,
     luaL_getmetatable(L, CLASS_DIRECTORY_TABLE);
     lua_setmetatable(L, -2);
 
-    lua_dir* ld = (lua_dir*)lua_newuserdata(L, sizeof(lua_dir) + pathlen + 1);
+    lua_dir* ld = (lua_dir*)lua_newuserdatauv(L, sizeof(lua_dir) + pathlen + 1, 0);
     char* dstPath = (char*)(ld + 1);
     *dstPath = '/';
     if (*path == '/')

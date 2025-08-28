@@ -227,11 +227,7 @@ static void dosbox_write_config(lua_State* L, const char* path)
         long oldSize = ftell(f);
         fseek(f, 0, SEEK_SET);
         if (!ferror(f) && (size_t)oldSize == length) {
-            char* buf = (char*)malloc(length);
-            if (!buf) {
-                fclose(f);
-                luaL_error(L, "out of memory.");
-            }
+            char* buf = (char*)lua_newuserdatauv(L, length, 0);
             size_t bytesRead = fread(buf, 1, length, f);
             if (!ferror(f) && bytesRead == length && !memcmp(buf, data, length)) {
                 free(buf);

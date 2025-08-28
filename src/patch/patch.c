@@ -32,7 +32,7 @@ static int patch_add(lua_State* L)
         patch = (PATCH*)lua_touserdata(L, -1);
     else {
         lua_pop(L, 1);
-        patch = (PATCH*)lua_newuserdata(L, sizeof(PATCH));
+        patch = (PATCH*)lua_newuserdatauv(L, sizeof(PATCH), 0);
         patch->elements = NULL;
         patch->extraBytes = 0;
         lua_setfield(L, -2, file);

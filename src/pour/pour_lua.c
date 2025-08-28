@@ -45,14 +45,14 @@ static int pour_run(lua_State* L)
     int argc = lua_gettop(L);
     const char* package = luaL_checkstring(L, 1);
 
-    char** argv = (char**)lua_newuserdata(L, argc * sizeof(char**));
+    char** argv = (char**)lua_newuserdatauv(L, argc * sizeof(char**), 0);
     argv[0] = (char*)package;
     for (int i = 1; i < argc; i++) {
         size_t argLen;
         const char* arg = luaL_checklstring(L, i + 1, &argLen);
 
         ++argLen;
-        argv[i] = (char*)lua_newuserdata(L, argLen);
+        argv[i] = (char*)lua_newuserdatauv(L, argLen, 0);
         memcpy(argv[i], arg, argLen);
     }
 

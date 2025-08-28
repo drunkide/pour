@@ -249,7 +249,7 @@ bool Pour_Run(const char* package, const char* chdir, int argc, char** argv, boo
         for (int i = 1; i < argc; i++) {
             if (argv[i][0] != '-') {
                 if (strpbrk(argv[i], "./\\:") != NULL) {
-                    char* path = (char*)lua_newuserdata(L, DIR_MAX);
+                    char* path = (char*)lua_newuserdatauv(L, DIR_MAX, 0);
                     strcpy(path, argv[i]);
                     Dir_MakeAbsolutePath(path);
                     adjustPath(path);
@@ -361,7 +361,7 @@ bool Pour_Main(int argc, char** argv)
 
     for (int i = n; i < argc; i++) {
         if (argv[i][0] != '-') {
-            PackageName* p = (PackageName*)lua_newuserdata(gL, sizeof(PackageName));
+            PackageName* p = (PackageName*)lua_newuserdatauv(gL, sizeof(PackageName), 0);
             p->next = NULL;
             p->name = argv[i];
             if (!firstPackage)
