@@ -69,7 +69,7 @@ PATCH* patch_find(lua_State* L, const char* fileName)
     return patch;
 }
 
-void patch_apply(lua_State* L, const char* fileName, PATCH* patch, void** fileData, unsigned long long* fileSize)
+void patch_apply(lua_State* L, const char* fileName, PATCH* patch, void** fileData, size_t* fileSize)
 {
     int total = 0;
     int applied = 0;

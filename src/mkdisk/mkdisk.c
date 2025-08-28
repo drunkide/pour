@@ -10,6 +10,7 @@
 #include <mkdisk/bootcode.h>
 #include <mkdisk/disk_config.h>
 #include <patch/patch.h>
+#include <string.h>
 
 #define CLASS_DIRECTORY "mkdisk.directory"
 #define CLASS_DIRECTORY_TABLE "mkdisk.directory.table"
@@ -172,7 +173,7 @@ static const DiskDir* MkDisk_PushMakeDir(Disk* dsk, const DiskDir* parentDir,
         lua_concat(L, 3);
         const char* newPath = lua_tostring(L, -1);
 
-        FSDir* dir;
+        FSDir* dir = NULL;
         switch (dsk->fs) {
             case FS_FAT: dir = fat_create_directory(parentDir->dir, dirName); break;
             case FS_EXT2: dir = ext2_create_directory(parentDir->dir, dirName, meta); break;
@@ -624,6 +625,7 @@ static int dir_tostring(lua_State* L)
 static int disk_tostring(lua_State* L)
 {
     const Disk* dsk = (Disk*)luaL_checkudata(L, 1, CLASS_DISK);
+    DONT_WARN_UNUSED(dsk);
     lua_pushstring(L, "<Disk*>");
     return 1;
 }

@@ -54,8 +54,8 @@ void MBR_Init(Disk* dsk, void* dst)
     p->entries[0].chs_start[2] = 0x00;
 
     switch (dsk->fs) {
-        case FS_FAT: p->entries[0].type = 6 /* FAT16 */;
-        case FS_EXT2: p->entries[0].type = (dsk->mbrFAT ? 6 /* FAT16 */ : 0x83 /* linux native */);
+        case FS_FAT: p->entries[0].type = 6 /* FAT16 */; break;
+        case FS_EXT2: p->entries[0].type = (dsk->mbrFAT ? 6 /* FAT16 */ : 0x83 /* linux native */); break;
     }
 
     p->entries[0].chs_end[0] = disk_config->mbr_chs_end_0;
