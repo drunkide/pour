@@ -237,7 +237,7 @@ static int dosbox_run(lua_State* L)
     argv[2] = "-conf";
     argv[3] = ".dosbox.conf";
 
-    if (!Pour_Run(L, "dosbox-x", NULL, 4, (char**)argv, false))
+    if (!Pour_Run(L, "dosbox-x", NULL, 4, (char**)argv, RUN_DONT_WAIT_NO_CONSOLE))
         return luaL_error(L, "unable to launch DOSBox.");
 
     return 0;

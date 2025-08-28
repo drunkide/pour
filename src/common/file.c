@@ -2,16 +2,25 @@
 #include <common/script.h>
 #include <common/utf8.h>
 #include <common/dirs.h>
+#include <common/console.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <stdio.h>
-#include <io.h>
 #include <limits.h>
 #include <errno.h>
 
+#ifndef _WIN32
+#include <unistd.h>
+#endif
+
 #ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
+ #define WIN32_LEAN_AND_MEAN
+ #include <windows.h>
+ #include <io.h>
+ #ifndef __MINGW32__
+  #define fileno _fileno
+ #endif
+ #define ftruncate _chsize
 #endif
 
 #ifndef PATH_MAX
@@ -127,8 +136,37 @@ void File_SetCurrentDirectory(lua_State* L, const char* path)
 
   #else
 
-    if (chdir(path) < 0)
+    if (chdir(path) != 0)
         luaL_error(L, "setcwd() failed: %s", strerror(errno));
+
+  #endif
+}
+
+bool File_TryDelete(lua_State* L, const char* path)
+{
+  #if defined(_WIN32) && !defined(USE_POSIX_IO)
+
+    const WCHAR* wpath = (const WCHAR*)Utf8_PushConvertToUtf16(L, path, NULL);
+    bool result = DeleteFileW(wpath);
+    if (!result) {
+        Con_PrintF(L, COLOR_WARNING, "WARNING: delete of file \"%s\" failed (code %p)\n",
+            path, (void*)(size_t)GetLastError());
+    }
+    lua_pop(L, 1);
+
+    return result;
+
+  #else
+
+    DONT_WARN_UNUSED(L);
+
+    if (remove(path) != 0) {
+        Con_PrintF(L, COLOR_WARNING, "WARNING: delete of file \"%s\" failed: %s\n",
+            path, strerror(errno));
+        return false;
+    }
+
+    return true;
 
   #endif
 }
@@ -169,6 +207,12 @@ File* File_PushOpen(lua_State* L, const char* path, openmode_t mode)
             dwFlags = FILE_FLAG_SEQUENTIAL_SCAN;
             action = "open";
             break;
+        case FILE_OPEN_MODIFY:
+            dwDesiredAccess = GENERIC_READ | GENERIC_WRITE;
+            dwCreationDisposition = OPEN_ALWAYS;
+            dwFlags = 0;
+            action = "open";
+            break;
         case FILE_CREATE_OVERWRITE:
             dwDesiredAccess = GENERIC_WRITE;
             dwCreationDisposition = CREATE_ALWAYS;
@@ -194,6 +238,10 @@ File* File_PushOpen(lua_State* L, const char* path, openmode_t mode)
     switch (mode) {
         case FILE_OPEN_SEQUENTIAL_READ:
             modstr = "rb";
+            action = "open";
+            break;
+        case FILE_OPEN_MODIFY:
+            modstr = "r+b";
             action = "open";
             break;
         case FILE_CREATE_OVERWRITE:
@@ -263,6 +311,7 @@ size_t File_GetSize(File* file)
   #else
 
     FILE* handle = file->handle;
+
     fseek(handle, 0, SEEK_END);
     long size = ftell(handle);
     fseek(handle, 0, SEEK_SET);
@@ -276,6 +325,107 @@ size_t File_GetSize(File* file)
         luaL_error(L, "file \"%s\" is too large.", file->name);
 
     return (size_t)size;
+
+  #endif
+}
+
+bool File_TrySetSize(File* file, size_t newSize)
+{
+    lua_State* L = file->L;
+
+  #ifdef _WIN32
+
+    HANDLE handle = file->handle;
+
+    DWORD result = SetFilePointer(handle, (LONG)newSize, NULL, FILE_BEGIN);
+    if (result == INVALID_SET_FILE_POINTER) {
+        Con_PrintF(L, COLOR_WARNING, "WARNING: truncate of file \"%s\" failed (code %p)\n",
+            file->name, (void*)(size_t)GetLastError());
+        return false;
+    }
+
+    if ((size_t)result != newSize) {
+        Con_PrintF(L, COLOR_WARNING, "WARNING: truncate of file \"%s\" failed.\n", file->name);
+        return false;
+    }
+
+    if (!SetEndOfFile(handle)) {
+        Con_PrintF(L, COLOR_WARNING, "WARNING: truncate of file \"%s\" failed (code %p)\n",
+            file->name, (void*)(size_t)GetLastError());
+        return false;
+    }
+
+    SetLastError(NO_ERROR);
+
+    DWORD hiPart = 0;
+    DWORD loPart = GetFileSize(file->handle, &hiPart);
+    if (loPart == INVALID_FILE_SIZE) {
+        DWORD dwError = GetLastError();
+        if (dwError != NO_ERROR) {
+            Con_PrintF(L, COLOR_WARNING, "WARNING: truncate of file \"%s\" failed (code %p)\n",
+                file->name, (void*)(size_t)dwError);
+            return false;
+        }
+    }
+
+    if (hiPart != 0 || (size_t)loPart != newSize) {
+        Con_PrintF(L, COLOR_WARNING, "WARNING: truncate of file \"%s\" failed.\n", file->name);
+        return false;
+    }
+
+    return true;
+
+  #else
+
+    FILE* handle = file->handle;
+
+    int fd = fileno(handle);
+    if (fd < 0 || ftruncate(fd, newSize) != 0) {
+        Con_PrintF(L, COLOR_WARNING, "WARNING: truncate of file \"%s\" failed: %s\n",
+            file->name, strerror(errno));
+        return false;
+    }
+
+    fseek(handle, 0, SEEK_END);
+    long fileSize = ftell(handle);
+    fseek(handle, 0, SEEK_SET);
+    if (ferror(handle) || (size_t)fileSize != newSize) {
+        Con_PrintF(L, COLOR_WARNING, "WARNING: truncate of file \"%s\" failed: %s\n",
+            file->name, strerror(errno));
+        return false;
+    }
+
+    return true;
+
+  #endif
+}
+
+void File_SetPosition(File* file, size_t offset)
+{
+    lua_State* L = file->L;
+
+  #if defined(_WIN32) && !defined(USE_POSIX_IO)
+
+    DWORD result = SetFilePointer(file->handle, (LONG)offset, NULL, FILE_BEGIN);
+    if (result == INVALID_SET_FILE_POINTER) {
+        luaL_error(L, "unable to %s file \"%s\" (code %p)",
+            "set position in", file->name, (void*)(size_t)GetLastError());
+    }
+
+    if ((size_t)result != offset) {
+        luaL_error(L, "invalid seek in file \"%s\": %s",
+            file->name, strerror(errno));
+    }
+
+  #else
+
+    FILE* handle = file->handle;
+
+    fseek(handle, offset, SEEK_SET);
+    if (ferror(handle)) {
+        luaL_error(L, "unable to %s file \"%s\": %s",
+            "set position in", file->name, strerror(errno));
+    }
 
   #endif
 }

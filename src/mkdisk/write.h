@@ -3,9 +3,11 @@
 
 #include <common/common.h>
 
-void write_begin(const char* file, size_t fileSize);
-void write_append(const void* data, size_t size);
-size_t write_get_current_offset(void);
-void write_commit(void);
+STRUCT(Write);
+
+Write* Write_Begin(lua_State* L, const char* file, size_t fileSize);
+void Write_Append(Write* wr, const void* data, size_t size);
+size_t Write_GetCurrentOffset(Write* wr);
+void Write_Commit(Write* wr);
 
 #endif

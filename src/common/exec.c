@@ -113,7 +113,8 @@ bool Exec_Command(lua_State* L, const char* const* argv, int argc, const char* c
     return Exec_CommandV(L, argv[0], argv, argc, chdir, true);
 }
 
-bool Exec_CommandV(lua_State* L, const char* command, const char* const* argv, int argc, const char* chdir, bool wait)
+bool Exec_CommandV(lua_State* L, const char* command, const char* const* argv, int argc,
+    const char* chdir, runmode_t mode)
 {
     int start = lua_gettop(L);
     int argStart = start;
@@ -154,18 +155,34 @@ bool Exec_CommandV(lua_State* L, const char* command, const char* const* argv, i
         cwd = cwdbuf;
     }
 
+    BOOL bInheritHandles = TRUE;
+    DWORD dwCreationFlags = CREATE_DEFAULT_ERROR_MODE;
+
+    switch (mode) {
+        case RUN_WAIT:
+            break;
+        case RUN_DONT_WAIT:
+            bInheritHandles = FALSE;
+            dwCreationFlags |= CREATE_NEW_CONSOLE;
+            break;
+        case RUN_DONT_WAIT_NO_CONSOLE:
+            bInheritHandles = FALSE;
+            dwCreationFlags |= DETACHED_PROCESS;
+            break;
+    }
+
     PROCESS_INFORMATION pi;
     STARTUPINFOW si;
     ZeroMemory(&pi, sizeof(pi));
     ZeroMemory(&si, sizeof(si));
     si.cb = sizeof(si);
-    if (!CreateProcessW(NULL, cmd16, NULL, NULL, TRUE, 0, NULL, cwd, &si, &pi)) {
+    if (!CreateProcessW(NULL, cmd16, NULL, NULL, bInheritHandles, dwCreationFlags, NULL, cwd, &si, &pi)) {
         Con_PrintF(L, COLOR_ERROR, "ERROR: CreateProcess failed (code 0x%p).\n", (void*)(size_t)GetLastError());
         lua_settop(L, start);
         return false;
     }
 
-    if (!wait) {
+    if (mode != RUN_WAIT) {
         lua_settop(L, start);
         CloseHandle(pi.hThread);
         CloseHandle(pi.hProcess);

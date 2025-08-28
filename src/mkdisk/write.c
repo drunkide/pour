@@ -1,188 +1,139 @@
 #include <common/common.h>
-#ifdef NDEBUG
-#undef NDEBUG
-#endif
-#include <stdint.h>
-#include <assert.h>
-#include <stdbool.h>
+#include <common/console.h>
+#include <common/file.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
-#ifndef _WIN32
-#include <unistd.h>
-#else
-#include <io.h>
- #ifndef __MINGW32__
-  #define fileno _fileno
- #endif
- #define ftruncate _chsize
-#endif
 #include <mkdisk/write.h>
 
-static const char* fileName;
-
-static char* new_buffer;
-static char* dst;
-static const char* dstEnd;
-static size_t new_size;
-
-static char* old_buffer;
-static size_t old_size;
-
-/****************************************************************************/
-
-static void error_reading_file(FILE* f)
+struct Write
 {
-    fprintf(stderr, "Error reading file \"%s\": %s\n", fileName, strerror(errno));
-    fclose(f);
-    exit(1);
-}
-
-static void error_writing_file(FILE* f)
-{
-    fprintf(stderr, "Error writing file \"%s\": %s\n", fileName, strerror(errno));
-    fclose(f);
-    remove(fileName);
-    exit(1);
-}
+    lua_State* L;
+    const char* fileName;
+    char* dst;
+    const char* dstEnd;
+    char* oldBuffer;
+    char* newBuffer;
+    size_t oldSize;
+    size_t newSize;
+    size_t indicatorTotal;
+    size_t indicatorTotalWritten;
+    size_t indicatorTotalSkipped;
+    size_t totalSkipped;
+    size_t totalWritten;
+};
 
 /****************************************************************************/
 
 #define INDICATOR_STEP (1048576/2)
 
-static size_t indicatorTotal;
-static size_t indicatorTotalWritten;
-static size_t indicatorTotalSkipped;
-static size_t totalSkipped;
-static size_t totalWritten;
-
-static void indicator_begin(void)
+static void indicator_begin(Write* wr)
 {
-    totalSkipped = 0;
-    totalWritten = 0;
-    indicatorTotal = 0;
-    indicatorTotalWritten = 0;
-    indicatorTotalSkipped = 0;
+    wr->totalSkipped = 0;
+    wr->totalWritten = 0;
+    wr->indicatorTotal = 0;
+    wr->indicatorTotalWritten = 0;
+    wr->indicatorTotalSkipped = 0;
 }
 
-static void indicator_write_char(void)
+static void indicator_write_char(Write* wr)
 {
+    lua_State* L = wr->L;
     static const size_t indicLen = 6;
     static const char indic[] = ".~*xX#";
     char ch;
 
-    if (indicatorTotalWritten == 0)
+    if (wr->indicatorTotalWritten == 0)
         ch = indic[0];
     else {
-        double percent = (indicatorTotalWritten * 1.0 / indicatorTotal);
+        double percent = (wr->indicatorTotalWritten * 1.0 / wr->indicatorTotal);
         size_t index = 1 + (size_t)(percent * (indicLen - 1));
         if (index >= indicLen)
             index = indicLen - 1;
         ch = indic[index];
     }
 
-    fputc(ch, stdout);
+    Con_PrintF(L, COLOR_PROGRESS, "%c", ch);
 
     #define DECREASE(x) (x = (x > INDICATOR_STEP ? x - INDICATOR_STEP : 0))
-    DECREASE(indicatorTotal);
-    DECREASE(indicatorTotalWritten);
-    DECREASE(indicatorTotalSkipped);
+    DECREASE(wr->indicatorTotal);
+    DECREASE(wr->indicatorTotalWritten);
+    DECREASE(wr->indicatorTotalSkipped);
 }
 
-static void indicator_add(size_t skipped, size_t written)
+static void indicator_add(Write* wr, size_t skipped, size_t written)
 {
-    totalSkipped += skipped;
-    totalWritten += written;
+    lua_State* L = wr->L;
 
-    indicatorTotal += skipped + written;
-    indicatorTotalSkipped += skipped;
-    indicatorTotalWritten += written;
+    wr->totalSkipped += skipped;
+    wr->totalWritten += written;
 
-    if (indicatorTotal >= INDICATOR_STEP) {
+    wr->indicatorTotal += skipped + written;
+    wr->indicatorTotalSkipped += skipped;
+    wr->indicatorTotalWritten += written;
+
+    if (wr->indicatorTotal >= INDICATOR_STEP) {
         do {
-            indicator_write_char();
-        } while (indicatorTotal >= INDICATOR_STEP);
-        fflush(stdout);
+            indicator_write_char(wr);
+        } while (wr->indicatorTotal >= INDICATOR_STEP);
+        Con_Flush(L);
     }
 }
 
-static void indicator_end(void)
+static void indicator_end(Write* wr)
 {
-    if (indicatorTotal != 0)
-        indicator_write_char();
+    if (wr->indicatorTotal != 0)
+        indicator_write_char(wr);
 }
 
 /****************************************************************************/
 
-static bool try_load_existing_file(void)
+static bool try_load_existing_file(Write* wr)
 {
-    old_size = 0;
-    old_buffer = NULL;
+    lua_State* L = wr->L;
 
-    FILE* f = fopen(fileName, "rb");
-    if (!f)
+    wr->oldSize = 0;
+    wr->oldBuffer = NULL;
+
+    if (!File_Exists(L, wr->fileName))
         return false;
 
-    fseek(f, 0, SEEK_END);
-    long fSize = ftell(f);
-    fseek(f, 0, SEEK_SET);
-    if (ferror(f) || fSize < 0)
-        error_reading_file(f);
-
-    old_size = (size_t)fSize;
-    old_buffer = (char*)malloc(old_size);
-    if (!old_buffer) {
-        fprintf(stderr, "Memory allocation failed.\n");
-        fclose(f);
-        exit(1);
-    }
-
-    size_t bytesRead = fread(old_buffer, 1, old_size, f);
-    if (ferror(f) || bytesRead != old_size)
-        error_reading_file(f);
-
-    fclose(f);
-
+    wr->oldBuffer = File_PushContents(L, wr->fileName, &wr->oldSize);
     return true;
 }
 
-static void full_write_file(void)
+static void full_write_file(Write* wr)
 {
-    printf("\n------------------------------------------------------\n");
-    printf("%s disk file: ", (old_buffer ? "Overwriting" : "Writing"));
-    fflush(stdout);
+    lua_State* L = wr->L;
 
-    FILE* f = fopen(fileName, "wb");
-    if (!f) {
-        fprintf(stderr, "Can't create \"%s\": %s\n", fileName, strerror(errno));
-        exit(1);
-    }
+    Con_PrintF(L, COLOR_SEPARATOR, "\n------------------------------------------------------\n");
+    Con_PrintF(L, COLOR_STATUS, "%s disk file: ", (wr->oldBuffer ? "Overwriting" : "Writing"));
+    Con_Flush(L);
 
-    size_t bytesWritten = fwrite(new_buffer, 1, new_size, f);
-    if (ferror(f) || bytesWritten != new_size)
-        error_writing_file(f);
+    File_Overwrite(L, wr->fileName, wr->newBuffer, wr->newSize);
 
-    fclose(f);
-
-    printf("Done.\n");
-    printf("------------------------------------------------------\n");
+    Con_PrintF(L, COLOR_SUCCESS, "Done.\n");
+    Con_PrintF(L, COLOR_SEPARATOR, "------------------------------------------------------\n");
 }
 
 #define MIN_OVERWRITE 512 /* to avoid thrashing */
 
-static void partial_update_file(FILE* f)
+static void partial_update_file(Write* wr, File* file)
 {
-    printf("\n------------------------------------------------------\n");
-    printf("Writing disk file: [");
-    fflush(stdout);
+    lua_State* L = wr->L;
 
-    const char* pOrig = old_buffer;
-    const char* pOrigEnd = old_buffer + old_size;
-    const char* pNew = new_buffer;
-    const char* pNewEnd = new_buffer + new_size;
+    Con_PrintF(L, COLOR_SEPARATOR, "\n------------------------------------------------------\n");
+    Con_PrintF(L, COLOR_STATUS, "Writing disk file: ");
+    Con_PrintF(L, COLOR_PROGRESS_SIDE, "[");
+    Con_Flush(L);
+
+    const char* pOrig = wr->oldBuffer;
+    const char* pOrigEnd = wr->oldBuffer + wr->oldSize;
+    const char* pNew = wr->newBuffer;
+    const char* pNewEnd = wr->newBuffer + wr->newSize;
 
     size_t skipped = 0;
-    indicator_begin();
+    indicator_begin(wr);
 
     while (pOrig < pOrigEnd) {
         /* skip while matching */
@@ -193,7 +144,7 @@ static void partial_update_file(FILE* f)
             continue;
         }
 
-        indicator_add(skipped, 0);
+        indicator_add(wr, skipped, 0);
         skipped = 0;
 
         /* calculate amount of bytes to overwrite */
@@ -203,154 +154,128 @@ static void partial_update_file(FILE* f)
             ++pNew;
         } while (pOrig < pOrigEnd && (*pOrig != *pNew || (pNew - start) < MIN_OVERWRITE));
 
-        size_t offset = start - new_buffer;
-        fseek(f, offset, SEEK_SET);
-        if (ferror(f))
-            error_writing_file(f);
-
-        size_t bytesToWrite = pNew - start;
-        size_t bytesWritten = fwrite(new_buffer + offset, 1, bytesToWrite, f);
-        if (ferror(f) || bytesWritten != bytesToWrite)
-            error_writing_file(f);
-
-        indicator_add(0, bytesWritten);
+        size_t offset = start - wr->newBuffer;
+        size_t count = pNew - start;
+        File_SetPosition(file, offset);
+        File_Write(file, wr->newBuffer + offset, count);
+        indicator_add(wr, 0, count);
     }
 
-    indicator_add(skipped, 0);
+    indicator_add(wr, skipped, 0);
 
     if (pNew < pNewEnd) {
-        size_t offset = pNew - new_buffer;
-        fseek(f, offset, SEEK_SET);
-        if (ferror(f))
-            error_writing_file(f);
-
-        size_t bytesToWrite = pNewEnd - pNew;
-        size_t bytesWritten = fwrite(new_buffer + offset, 1, bytesToWrite, f);
-        if (ferror(f) || bytesWritten != bytesToWrite)
-            error_writing_file(f);
-
-        indicator_add(0, bytesWritten);
+        size_t offset = pNew - wr->newBuffer;
+        size_t count = pNewEnd - pNew;
+        File_SetPosition(file, offset);
+        File_Write(file, wr->newBuffer + offset, count);
+        indicator_add(wr, 0, count);
     }
 
-    indicator_end();
+    indicator_end(wr);
 
-    printf("]\nModified %.1f%% of disk (", (totalWritten * 100.0 / new_size));
-    if (totalWritten >= 1024*1024*1024)
-        printf("%.2f Gbytes", totalWritten / (1024.0*1024.0*1024.0));
-    else if (totalWritten >= 1024*1024)
-        printf("%.2f Mbytes", totalWritten / (1024.0*1024.0));
+    char buf1[256];
+    sprintf(buf1, "Modified %.1f%% of disk (", (wr->totalWritten * 100.0 / wr->newSize));
+
+    char buf2[256];
+    if (wr->totalWritten >= 1024*1024*1024)
+        sprintf(buf2, "%.2f Gbytes)", wr->totalWritten / (1024.0*1024.0*1024.0));
+    else if (wr->totalWritten >= 1024*1024)
+        sprintf(buf2, "%.2f Mbytes)", wr->totalWritten / (1024.0*1024.0));
     else
-        printf("%.2f Kbytes", totalWritten / (1024.0));
-    printf(")\n------------------------------------------------------\n");
+        sprintf(buf2, "%.2f Kbytes)", wr->totalWritten / (1024.0));
+
+    Con_PrintF(L, COLOR_PROGRESS_SIDE, "]\n");
+    Con_PrintF(L, COLOR_SUCCESS, "%s", buf1);
+    Con_PrintF(L, COLOR_SUCCESS, "%s", buf2);
+    Con_PrintF(L, COLOR_SEPARATOR, "\n------------------------------------------------------\n");
 }
 
-static void validate_written_file(void)
+static void validate_written_file(Write* wr)
 {
-    old_buffer = realloc(old_buffer, new_size);
-    if (!old_buffer) {
-        fprintf(stderr, "Memory allocation failed.\n");
-        exit(1);
+    lua_State* L = wr->L;
+
+    if (wr->newSize > wr->oldSize)
+        wr->oldBuffer = (char*)lua_newuserdatauv(L, wr->newSize, 0);
+
+    File* file = File_PushOpen(L, wr->fileName, FILE_OPEN_SEQUENTIAL_READ);
+    if (File_GetSize(file) != wr->newSize) {
+        File_Close(file);
+        goto failed;
     }
 
-    FILE* f = fopen(fileName, "rb");
-    if (!f) {
-        fprintf(stderr, "Can't open \"%s\": %s\n", fileName, strerror(errno));
-        remove(fileName);
-        exit(1);
-    }
+    File_Read(file, wr->oldBuffer, wr->newSize);
+    File_Close(file);
 
-    size_t bytesRead = fread(old_buffer, 1, new_size, f);
-    if (ferror(f) || bytesRead != new_size) {
-        fprintf(stderr, "Error reading file \"%s\": %s\n", fileName, strerror(errno));
-        fclose(f);
-        remove(fileName);
-        exit(1);
-    }
-
-    fclose(f);
-
-    if (memcmp(old_buffer, new_buffer, new_size) != 0) {
-        fprintf(stderr, "\n**** VALIDATION FAILED -- WRITTEN FILE MISMATCH! ****\n\n");
-        remove(fileName);
-        exit(1);
+    if (memcmp(wr->oldBuffer, wr->newBuffer, wr->newSize) != 0) {
+      failed:
+        File_TryDelete(L, wr->fileName);
+        luaL_error(L, "**** VALIDATION FAILED -- WRITTEN FILE MISMATCH! ****");
     }
 }
 
 /****************************************************************************/
 
-void write_begin(const char* file, size_t fileSize)
+Write* Write_Begin(lua_State* L, const char* file, size_t fileSize)
 {
-    new_buffer = (char*)malloc(fileSize);
-    if (!new_buffer) {
-        fprintf(stderr, "Memory allocation failed.\n");
-        exit(1);
-    }
+    Write* wr = (Write*)lua_newuserdatauv(L, sizeof(Write) + fileSize, 0);
+    char* newBuffer = (char*)(wr + 1);
 
-    dst = new_buffer;
-    dstEnd = new_buffer + fileSize;
-    new_size = fileSize;
+    memset(wr, 0, sizeof(Write));
+    wr->L = L;
+    wr->fileName = file;
+    wr->dst = newBuffer;
+    wr->dstEnd = newBuffer + fileSize;
+    wr->oldBuffer = NULL;
+    wr->newBuffer = newBuffer;
+    wr->oldSize = 0;
+    wr->newSize = fileSize;
 
-    fileName = file;
+    return wr;
 }
 
-void write_append(const void* data, size_t size)
+void Write_Append(Write* wr, const void* data, size_t size)
 {
-    assert(dst + size <= dstEnd);
+    char* dst = wr->dst;
+    if (dst + size > wr->dstEnd)
+        luaL_error(wr->L, "write: overflow.");
     memcpy(dst, data, size);
-    dst += size;
+    wr->dst = dst + size;
 }
 
-size_t write_get_current_offset(void)
+size_t Write_GetCurrentOffset(Write* wr)
 {
-    return dst - new_buffer;
+    return wr->dst - wr->newBuffer;
 }
 
-void write_commit(void)
+void Write_Commit(Write* wr)
 {
-    try_load_existing_file();
+    lua_State* L = wr->L;
 
-    if (!old_buffer) {
-        full_write_file();
+    if (!try_load_existing_file(wr)) {
+        full_write_file(wr);
         return;
     }
 
-    if (old_size == new_size && !memcmp(old_buffer, new_buffer, new_size)) {
-        printf("\n------------------------------------------------------\n");
-        printf("Existing disk file is identical, not writing.\n");
-        printf("------------------------------------------------------\n");
+    if (wr->oldSize == wr->newSize && !memcmp(wr->oldBuffer, wr->newBuffer, wr->newSize)) {
+        Con_PrintF(L, COLOR_SUCCESS, "\n------------------------------------------------------\n");
+        Con_PrintF(L, COLOR_SUCCESS, "Existing disk file is identical, not writing.\n");
+        Con_PrintF(L, COLOR_SUCCESS, "------------------------------------------------------\n");
         return;
     }
 
-    FILE* f = fopen(fileName, "r+b");
-    if (!f) {
-        fprintf(stderr, "Can't overwrite \"%s\": %s\n", fileName, strerror(errno));
-        exit(1);
-    }
+    File* file = File_PushOpen(L, wr->fileName, FILE_OPEN_MODIFY);
 
-    if (new_size < old_size) {
-        int fd = fileno(f);
-        if (fd < 0 || ftruncate(fd, new_size) < 0) {
-            fprintf(stderr, "WARNING: truncate of file \"%s\" failed: %s\n", fileName, strerror(errno));
-            fclose(f);
-            full_write_file();
+    if (wr->newSize < wr->oldSize) {
+        if (!File_TrySetSize(file, wr->newSize)) {
+            full_write_file(wr);
             return;
         }
 
-        fseek(f, 0, SEEK_END);
-        long newSize = ftell(f);
-        fseek(f, 0, SEEK_SET);
-        if (ferror(f) || (size_t)newSize != new_size) {
-            fprintf(stderr, "WARNING: truncate of file \"%s\" failed: %s\n", fileName, strerror(errno));
-            fclose(f);
-            full_write_file();
-            return;
-        }
-
-        old_size = new_size;
+        wr->oldSize = wr->newSize;
     }
 
-    partial_update_file(f);
-    fclose(f);
+    partial_update_file(wr, file);
+    File_Close(file);
 
-    validate_written_file();
+    validate_written_file(wr);
 }

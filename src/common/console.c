@@ -55,6 +55,10 @@ void Con_PrintV(lua_State* L, ConColor color, const char* fmt, va_list args)
     switch (color) {
         case COLOR_DEFAULT: default: wAttr = g_defaultColor; break;
         case COLOR_COMMAND: wAttr = (FOREGROUND_GREEN | FOREGROUND_BLUE); break;
+        case COLOR_PROGRESS: wAttr = (FOREGROUND_RED | FOREGROUND_BLUE); break;
+        case COLOR_PROGRESS_SIDE: wAttr = (FOREGROUND_RED | FOREGROUND_BLUE | FOREGROUND_INTENSITY); break;
+        case COLOR_STATUS: wAttr = (FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY); break;
+        case COLOR_SEPARATOR: wAttr = (FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY); break;
         case COLOR_SUCCESS: wAttr = (FOREGROUND_GREEN | FOREGROUND_INTENSITY); break;
         case COLOR_WARNING: wAttr = (FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY); break;
         case COLOR_ERROR: wAttr = (FOREGROUND_RED | FOREGROUND_INTENSITY); break;
@@ -74,6 +78,8 @@ void Con_PrintV(lua_State* L, ConColor color, const char* fmt, va_list args)
         SetConsoleTextAttribute(g_hStdOut, g_defaultColor);
 
         LeaveCriticalSection(&g_criticalSection);
+
+        lua_pop(L, 1);
     }
 
   #else
@@ -81,6 +87,8 @@ void Con_PrintV(lua_State* L, ConColor color, const char* fmt, va_list args)
     fwrite(str, 1, strlen(str), stdout);
 
   #endif
+
+    lua_pop(L, 1);
 }
 
 void Con_PrintF(lua_State* L, ConColor color, const char* fmt, ...)
@@ -90,4 +98,10 @@ void Con_PrintF(lua_State* L, ConColor color, const char* fmt, ...)
     va_start(args, fmt);
     Con_PrintV(L, color, fmt, args);
     va_end(args);
+}
+
+void Con_Flush(lua_State* L)
+{
+    DONT_WARN_UNUSED(L);
+    /* FIXME */
 }

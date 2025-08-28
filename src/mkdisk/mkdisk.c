@@ -576,7 +576,7 @@ static int mkdisk_write_vhd(lua_State* L)
             ext2_write();
         else
             fat_write();
-        vhd_write(vhd_name);
+        VHD_Write(L, vhd_name);
     }
 
     written = true;
@@ -606,7 +606,7 @@ static int mkdisk_write_img(lua_State* L)
             ext2_write();
         else
             fat_write();
-        vhd_write_as_img(img_name, mbr);
+        VHD_WriteAsIMG(L, img_name, mbr);
     }
 
     written = true;

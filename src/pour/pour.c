@@ -199,7 +199,7 @@ static void adjustPath(char* dst)
     }
 }
 
-bool Pour_Run(lua_State* L, const char* package, const char* chdir, int argc, char** argv, bool wait)
+bool Pour_Run(lua_State* L, const char* package, const char* chdir, int argc, char** argv, runmode_t mode)
 {
     int n = lua_gettop(L);
     Package pkg;
@@ -271,7 +271,7 @@ bool Pour_Run(lua_State* L, const char* package, const char* chdir, int argc, ch
         }
     }
 
-    if (!Exec_CommandV(L, exe, (const char* const*)argv, argc, chdir, wait))
+    if (!Exec_CommandV(L, exe, (const char* const*)argv, argc, chdir, mode))
         goto error;
 
     lua_settop(L, n);
@@ -346,7 +346,7 @@ bool Pour_Main(lua_State* L, int argc, char** argv)
                 return false;
             }
             ++n;
-            return Pour_Run(L, argv[n], chdir, argc - n, argv + n, true);
+            return Pour_Run(L, argv[n], chdir, argc - n, argv + n, RUN_WAIT);
         } else if (!strcmp(argv[n], "--script")) {
             if (n + 1 >= argc) {
                 Con_PrintF(L, COLOR_ERROR, "ERROR: missing script name after '%s'.\n", argv[n]);

@@ -151,40 +151,42 @@ void vhd_write_sectors(size_t firstSector, const void* data, size_t size)
     }
 }
 
-void vhd_write(const char* file)
+void VHD_Write(lua_State* L, const char* file)
 {
     size_t fileSize = sizeof(footer) + sizeof(dynhdr) + batSize;
     for (vhd_blockchain* block = first; block; block = block->next)
         fileSize += sizeof(vhd_block);
     fileSize += sizeof(footer);
 
-    write_begin(file, fileSize);
-    write_append(&footer, sizeof(footer));
-    write_append(&dynhdr, sizeof(dynhdr));
-    write_append(bat, batSize);
+    Write* wr = Write_Begin(L, file, fileSize);
+    Write_Append(wr, &footer, sizeof(footer));
+    Write_Append(wr, &dynhdr, sizeof(dynhdr));
+    Write_Append(wr, bat, batSize);
     for (vhd_blockchain* block = first; block; block = block->next) {
-        if (block->offset != write_get_current_offset()) {
-            fprintf(stderr, "Block offset mismatch!\n");
-            exit(1);
-        }
-        write_append(&block->data, sizeof(vhd_block));
+        if (block->offset != Write_GetCurrentOffset(wr))
+            luaL_error(L, "VHD: block offset mismatch!");
+        Write_Append(wr, &block->data, sizeof(vhd_block));
     }
-    write_append(&footer, sizeof(footer));
-    assert(write_get_current_offset() == fileSize);
+    Write_Append(wr, &footer, sizeof(footer));
 
-    write_commit();
+    if (Write_GetCurrentOffset(wr) != fileSize)
+        luaL_error(L, "VHD: calculated file size mismatch!");
+
+    Write_Commit(wr);
 }
 
-void vhd_write_as_img(const char* file, bool includeMBR)
+void VHD_WriteAsIMG(lua_State* L, const char* file, bool includeMBR)
 {
     size_t fileSize = (includeMBR ? disk_config->vhd_size : disk_config->mbr_disk_size * VHD_SECTOR_SIZE);
 
-    write_begin(file, fileSize);
+    Write* wr = Write_Begin(L, file, fileSize);
     for (size_t i = 0; i < fileSize / VHD_SECTOR_SIZE; i++) {
         const uint8_t* p = vhd_read_sector(i + (includeMBR ? 0 : disk_config->mbr_disk_start));
-        write_append(p, VHD_SECTOR_SIZE);
+        Write_Append(wr, p, VHD_SECTOR_SIZE);
     }
-    assert(write_get_current_offset() == fileSize);
 
-    write_commit();
+    if (Write_GetCurrentOffset(wr) != fileSize)
+        luaL_error(L, "VHD: calculated file size mismatch!");
+
+    Write_Commit(wr);
 }

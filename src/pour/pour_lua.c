@@ -42,6 +42,7 @@ static int pour_run(lua_State* L)
 {
     int argc = lua_gettop(L);
     const char* package = luaL_checkstring(L, 1);
+    const char* modestr = luaL_optstring(L, 2, "wait");
 
     char** argv = (char**)lua_newuserdatauv(L, argc * sizeof(char**), 0);
     argv[0] = (char*)package;
@@ -54,7 +55,17 @@ static int pour_run(lua_State* L)
         memcpy(argv[i], arg, argLen);
     }
 
-    if (!Pour_Run(L, package, NULL, argc, argv, true))
+    runmode_t mode;
+    if (!strcmp(modestr, "wait"))
+        mode = RUN_WAIT;
+    else if (!strcmp(modestr, "nowait"))
+        mode = RUN_DONT_WAIT;
+    else if (!strcmp(modestr, "nowait,noconsole"))
+        mode = RUN_DONT_WAIT_NO_CONSOLE;
+    else
+        return luaL_error(L, "invalid value \"%s\" for the wait argument.", modestr);
+
+    if (!Pour_Run(L, package, NULL, argc, argv, mode))
         return luaL_error(L, "command execution failed.");
 
     return 0;
