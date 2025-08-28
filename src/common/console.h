@@ -19,8 +19,11 @@ typedef enum ConColor {
 void Con_Init(void);
 void Con_Terminate(void);
 
+void Con_Print(lua_State* L, ConColor color, const char* str);
 void Con_PrintV(lua_State* L, ConColor color, const char* fmt, va_list args);
 void Con_PrintF(lua_State* L, ConColor color, const char* fmt, ...);
+
+void Con_PrintSeparator(lua_State* L);
 
 void Con_Flush(lua_State* L);
 

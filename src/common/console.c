@@ -2,6 +2,7 @@
 #include <common/utf8.h>
 #include <common/script.h>
 #include <stdlib.h>
+#include <malloc.h>
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -45,17 +46,15 @@ void Con_Terminate()
     g_initialized = false;
 }
 
-void Con_PrintV(lua_State* L, ConColor color, const char* fmt, va_list args)
+void Con_Print(lua_State* L, ConColor color, const char* str)
 {
-    const char* str = lua_pushvfstring(L, fmt, args);
-
   #ifdef _WIN32
 
     WORD wAttr;
     switch (color) {
         case COLOR_DEFAULT: default: wAttr = g_defaultColor; break;
         case COLOR_COMMAND: wAttr = (FOREGROUND_GREEN | FOREGROUND_BLUE); break;
-        case COLOR_PROGRESS: wAttr = (FOREGROUND_RED | FOREGROUND_BLUE); break;
+        case COLOR_PROGRESS: wAttr = (FOREGROUND_RED); break;
         case COLOR_PROGRESS_SIDE: wAttr = (FOREGROUND_RED | FOREGROUND_BLUE | FOREGROUND_INTENSITY); break;
         case COLOR_STATUS: wAttr = (FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY); break;
         case COLOR_SEPARATOR: wAttr = (FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY); break;
@@ -87,7 +86,12 @@ void Con_PrintV(lua_State* L, ConColor color, const char* fmt, va_list args)
     fwrite(str, 1, strlen(str), stdout);
 
   #endif
+}
 
+void Con_PrintV(lua_State* L, ConColor color, const char* fmt, va_list args)
+{
+    const char* str = lua_pushvfstring(L, fmt, args);
+    Con_Print(L, color, str);
     lua_pop(L, 1);
 }
 
@@ -98,6 +102,27 @@ void Con_PrintF(lua_State* L, ConColor color, const char* fmt, ...)
     va_start(args, fmt);
     Con_PrintV(L, color, fmt, args);
     va_end(args);
+}
+
+void Con_PrintSeparator(lua_State* L)
+{
+    int width = 80;
+
+    CONSOLE_SCREEN_BUFFER_INFO csbi;
+    if (GetConsoleScreenBufferInfo(g_hStdOut, &csbi))
+        width = csbi.dwSize.X - csbi.dwCursorPosition.X;
+
+    if (width > 2000)
+        width = 2000; /* be reasonable... */
+
+    if (width <= 0)
+        return;
+
+    char* buf = (char*)alloca((size_t)width + 1);
+    memset(buf, '=', (size_t)width);
+    buf[width] = 0;
+
+    Con_Print(L, COLOR_SEPARATOR, buf);
 }
 
 void Con_Flush(lua_State* L)

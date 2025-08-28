@@ -106,14 +106,15 @@ static void full_write_file(Write* wr)
 {
     lua_State* L = wr->L;
 
-    Con_PrintF(L, COLOR_SEPARATOR, "\n------------------------------------------------------\n");
+    Con_Print(L, COLOR_SEPARATOR, "\n");
+    Con_PrintSeparator(L);
     Con_PrintF(L, COLOR_STATUS, "%s disk file: ", (wr->oldBuffer ? "Overwriting" : "Writing"));
     Con_Flush(L);
 
     File_Overwrite(L, wr->fileName, wr->newBuffer, wr->newSize);
 
-    Con_PrintF(L, COLOR_SUCCESS, "Done.\n");
-    Con_PrintF(L, COLOR_SEPARATOR, "------------------------------------------------------\n");
+    Con_Print(L, COLOR_SUCCESS, "Done.\n");
+    Con_PrintSeparator(L);
 }
 
 #define MIN_OVERWRITE 512 /* to avoid thrashing */
@@ -122,9 +123,9 @@ static void partial_update_file(Write* wr, File* file)
 {
     lua_State* L = wr->L;
 
-    Con_PrintF(L, COLOR_SEPARATOR, "\n------------------------------------------------------\n");
-    Con_PrintF(L, COLOR_STATUS, "Writing disk file: ");
-    Con_PrintF(L, COLOR_PROGRESS_SIDE, "[");
+    Con_PrintSeparator(L);
+    Con_Print(L, COLOR_STATUS, "Writing disk file: ");
+    Con_Print(L, COLOR_PROGRESS_SIDE, "[");
     Con_Flush(L);
 
     const char* pOrig = wr->oldBuffer;
@@ -178,16 +179,17 @@ static void partial_update_file(Write* wr, File* file)
 
     char buf2[256];
     if (wr->totalWritten >= 1024*1024*1024)
-        sprintf(buf2, "%.2f Gbytes)", wr->totalWritten / (1024.0*1024.0*1024.0));
+        sprintf(buf2, "%.2f G", wr->totalWritten / (1024.0*1024.0*1024.0));
     else if (wr->totalWritten >= 1024*1024)
-        sprintf(buf2, "%.2f Mbytes)", wr->totalWritten / (1024.0*1024.0));
+        sprintf(buf2, "%.2f M", wr->totalWritten / (1024.0*1024.0));
     else
-        sprintf(buf2, "%.2f Kbytes)", wr->totalWritten / (1024.0));
+        sprintf(buf2, "%.2f K", wr->totalWritten / (1024.0));
 
-    Con_PrintF(L, COLOR_PROGRESS_SIDE, "]\n");
-    Con_PrintF(L, COLOR_SUCCESS, "%s", buf1);
-    Con_PrintF(L, COLOR_SUCCESS, "%s", buf2);
-    Con_PrintF(L, COLOR_SEPARATOR, "\n------------------------------------------------------\n");
+    Con_Print(L, COLOR_PROGRESS_SIDE, "]\n");
+    Con_Print(L, COLOR_WARNING, buf1);
+    Con_Print(L, COLOR_WARNING, buf2);
+    Con_Print(L, COLOR_WARNING, "bytes)\n");
+    Con_PrintSeparator(L);
 }
 
 static void validate_written_file(Write* wr)
@@ -257,9 +259,9 @@ void Write_Commit(Write* wr)
     }
 
     if (wr->oldSize == wr->newSize && !memcmp(wr->oldBuffer, wr->newBuffer, wr->newSize)) {
-        Con_PrintF(L, COLOR_SUCCESS, "\n------------------------------------------------------\n");
-        Con_PrintF(L, COLOR_SUCCESS, "Existing disk file is identical, not writing.\n");
-        Con_PrintF(L, COLOR_SUCCESS, "------------------------------------------------------\n");
+        Con_Print(L, COLOR_SEPARATOR, "\n===============================================\n");
+        Con_Print(L, COLOR_SUCCESS,     " Existing disk file is identical, not writing.\n");
+        Con_Print(L, COLOR_SEPARATOR,   "===============================================\n\n");
         return;
     }
 
