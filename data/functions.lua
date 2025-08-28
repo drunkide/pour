@@ -2,6 +2,31 @@
 ----------------------------------------------------------------------------------------------------------------------
 if WINDOWS then
 
+function mingw32_440_generate(srcdir, bindir, buildtype)
+    pour.require("ninja")
+    pour.require("mingw32-4.4.0")
+    pour.chdir(bindir)
+    pour.run('cmake-3.5.2',
+            '-G', 'Ninja',
+            '-DCMAKE_BUILD_TYPE='..buildtype,
+            srcdir
+        )
+end
+
+function mingw32_440(srcdir, bindir, buildtype, exe)
+    pour.require("ninja")
+    pour.require("mingw32-4.4.0")
+    pour.chdir(bindir)
+    if not pour.file_exists(exe) then
+        mingw32_440_generate(srcdir, bindir, buildtype)
+    end
+    pour.run('cmake-3.5.2', '--build', '.')
+end
+
+end
+----------------------------------------------------------------------------------------------------------------------
+if WINDOWS then
+
 function mingw32_810_generate(srcdir, bindir, buildtype)
     pour.require("ninja")
     pour.require("mingw32-8.1.0")
@@ -103,6 +128,30 @@ function clang_400_win32(srcdir, bindir, buildtype, exe, extra)
         clang_400_win32_generate(srcdir, bindir, buildtype, extra)
     end
     pour.run('cmake-3.31.4', '--build', '.')
+end
+
+end
+----------------------------------------------------------------------------------------------------------------------
+if WINDOWS then
+
+function msvc20_generate(srcdir, bindir, buildtype)
+    pour.fetch("vm-windows-nt31")
+    pour.chdir(bindir)
+    pour.run('cmake-3.5.2',
+            '-G', 'NMake Makefiles',
+            '-DOLD_MSVC=TRUE',
+            '-DCMAKE_BUILD_TYPE='..buildtype,
+            srcdir
+        )
+end
+
+function msvc20(srcdir, bindir, buildtype, exe)
+    pour.fetch("vm-windows-nt31")
+    pour.chdir(bindir)
+    if not pour.file_exists(exe) then
+        msvc20_generate(srcdir, bindir, buildtype)
+    end
+    pour.run('cmake-3.5.2', '--build', '.')
 end
 
 end
