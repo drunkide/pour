@@ -7,10 +7,8 @@
 #include <windows.h>
 #endif
 
-const char* Env_PushGet(const char* variable)
+const char* Env_PushGet(lua_State* L, const char* variable)
 {
-    lua_State* L = gL;
-
   #ifdef _WIN32
 
     const WCHAR* name16 = (const WCHAR*)Utf8_PushConvertToUtf16(L, variable, NULL);
@@ -36,10 +34,8 @@ const char* Env_PushGet(const char* variable)
   #endif
 }
 
-void Env_Set(const char* variable, const char* value)
+void Env_Set(lua_State* L, const char* variable, const char* value)
 {
-    lua_State* L = gL;
-
   #ifdef _WIN32
 
     int n = lua_gettop(L);
@@ -59,10 +55,8 @@ void Env_Set(const char* variable, const char* value)
   #endif
 }
 
-void Env_PrependPath(const char* path)
+void Env_PrependPath(lua_State* L, const char* path)
 {
-    lua_State* L = gL;
-
   #ifdef _WIN32
 
     int n = lua_gettop(L);

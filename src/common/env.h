@@ -3,9 +3,9 @@
 
 #include <common/common.h>
 
-const char* Env_PushGet(const char* variable);
-void Env_Set(const char* variable, const char* value);
+const char* Env_PushGet(lua_State* L, const char* variable);
+void Env_Set(lua_State* L, const char* variable, const char* value);
 
-void Env_PrependPath(const char* path);
+void Env_PrependPath(lua_State* L, const char* path);
 
 #endif

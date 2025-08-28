@@ -222,9 +222,9 @@ static void dosbox_write_config(lua_State* L, const char* path)
     size_t length;
     const char* data = lua_tolstring(L, -1, &length);
     if (File_MaybeOverwrite(L, path, data, length))
-        Con_PrintF(COLOR_WARNING, "DOSBox: wrote new config file.\n");
+        Con_PrintF(L, COLOR_WARNING, "DOSBox: wrote new config file.\n");
     else
-        Con_PrintF(COLOR_SUCCESS, "DOSBox: config file unchanged.\n");
+        Con_PrintF(L, COLOR_SUCCESS, "DOSBox: config file unchanged.\n");
 }
 
 static int dosbox_run(lua_State* L)
@@ -237,7 +237,7 @@ static int dosbox_run(lua_State* L)
     argv[2] = "-conf";
     argv[3] = ".dosbox.conf";
 
-    if (!Pour_Run("dosbox-x", NULL, 4, (char**)argv, false))
+    if (!Pour_Run(L, "dosbox-x", NULL, 4, (char**)argv, false))
         return luaL_error(L, "unable to launch DOSBox.");
 
     return 0;

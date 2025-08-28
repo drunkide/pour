@@ -34,7 +34,7 @@ static int pour_file_exists(lua_State* L)
 static int pour_require(lua_State* L)
 {
     const char* package = luaL_checkstring(L, 1);
-    if (!Pour_Install(package))
+    if (!Pour_Install(L, package))
         return luaL_error(L, "could not install required package '%s'.", package);
     return 0;
 }
@@ -55,7 +55,7 @@ static int pour_run(lua_State* L)
         memcpy(argv[i], arg, argLen);
     }
 
-    if (!Pour_Run(package, NULL, argc, argv, true))
+    if (!Pour_Run(L, package, NULL, argc, argv, true))
         return luaL_error(L, "command execution failed.");
 
     return 0;
@@ -73,12 +73,12 @@ static int pour_shell_open(lua_State* L)
     memcpy(ptr, file, fileLen);
     Dir_ToNativeSeparators(ptr);
 
-    const WCHAR* wfile = (const WCHAR*)Utf8_PushConvertToUtf16(gL, ptr, NULL);
+    const WCHAR* wfile = (const WCHAR*)Utf8_PushConvertToUtf16(L, ptr, NULL);
     bool result = (INT_PTR)ShellExecuteW(NULL, NULL, wfile, NULL, NULL, SW_SHOWNORMAL) > 32;
-    lua_pop(gL, 1);
+    lua_pop(L, 1);
 
     if (!result)
-        luaL_error(gL, "unable to open file \"%s\".", file);
+        luaL_error(L, "unable to open file \"%s\".", file);
 
   #else
 

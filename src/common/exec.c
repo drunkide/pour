@@ -52,7 +52,7 @@ static BOOL WINAPI Exec_CtrlHandler(DWORD ctrl)
 }
 #endif
 
-void Exec_Init()
+void Exec_Init(lua_State* L)
 {
     if (g_initialized)
         return;
@@ -63,7 +63,7 @@ void Exec_Init()
 
     g_hChildJob = CreateJobObject(NULL, NULL);
     if (!g_hChildJob)
-        luaL_error(gL, "CreateJobObject failed (code 0x%p).", (void*)(size_t)GetLastError());
+        luaL_error(L, "CreateJobObject failed (code 0x%p).", (void*)(size_t)GetLastError());
 
     JOBOBJECT_BASIC_LIMIT_INFORMATION jbli;
     ZeroMemory(&jbli, sizeof(jbli));
@@ -109,14 +109,13 @@ static void pushArgument(lua_State* L, const char* argument)
         lua_pushliteral(L, "\"");
 }
 
-bool Exec_Command(const char* const* argv, int argc, const char* chdir)
+bool Exec_Command(lua_State* L, const char* const* argv, int argc, const char* chdir)
 {
-    return Exec_CommandV(argv[0], argv, argc, chdir, true);
+    return Exec_CommandV(L, argv[0], argv, argc, chdir, true);
 }
 
-bool Exec_CommandV(const char* command, const char* const* argv, int argc, const char* chdir, bool wait)
+bool Exec_CommandV(lua_State* L, const char* command, const char* const* argv, int argc, const char* chdir, bool wait)
 {
-    lua_State* L = gL;
     luaL_checkstack(L, 100, NULL);
 
   #ifdef _WIN32
@@ -141,15 +140,15 @@ bool Exec_CommandV(const char* command, const char* const* argv, int argc, const
     const char* cmd = lua_tostring(L, -1);
 
     if (!g_dont_print_commands)
-        Con_PrintF(COLOR_COMMAND, "# %s\n", cmd);
+        Con_PrintF(L, COLOR_COMMAND, "# %s\n", cmd);
 
   #ifdef _WIN32
 
-    WCHAR* cmd16 = (WCHAR*)Utf8_PushConvertToUtf16(gL, cmd, NULL);
+    WCHAR* cmd16 = (WCHAR*)Utf8_PushConvertToUtf16(L, cmd, NULL);
     WCHAR* cwd, cwdbuf[MAX_PATH];
 
     if (chdir)
-        cwd = (WCHAR*)Utf8_PushConvertToUtf16(gL, chdir, NULL);
+        cwd = (WCHAR*)Utf8_PushConvertToUtf16(L, chdir, NULL);
     else {
         cwdbuf[0] = 0;
         GetCurrentDirectoryW(MAX_PATH, cwdbuf);
@@ -162,7 +161,7 @@ bool Exec_CommandV(const char* command, const char* const* argv, int argc, const
     ZeroMemory(&si, sizeof(si));
     si.cb = sizeof(si);
     if (!CreateProcessW(NULL, cmd16, NULL, NULL, TRUE, 0, NULL, cwd, &si, &pi)) {
-        Con_PrintF(COLOR_ERROR, "ERROR: CreateProcess failed (code 0x%p).\n", (void*)(size_t)GetLastError());
+        Con_PrintF(L, COLOR_ERROR, "ERROR: CreateProcess failed (code 0x%p).\n", (void*)(size_t)GetLastError());
         lua_settop(L, start);
         return false;
     }
@@ -193,7 +192,7 @@ bool Exec_CommandV(const char* command, const char* const* argv, int argc, const
 
     if (dwExitCode != 0) {
         if (!g_ctrlC)
-            Con_PrintF(COLOR_ERROR, "ERROR: command exited with code %d.\n", (int)dwExitCode);
+            Con_PrintF(L, COLOR_ERROR, "ERROR: command exited with code %d.\n", (int)dwExitCode);
         lua_settop(L, start);
         return false;
     }

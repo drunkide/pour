@@ -68,7 +68,7 @@ static bool Utf8_GetNextUtf32(const char** pSrc, uint32_t* codepoint)
 /*****************************************************************************
  * ^^ End on Flexible and Economical UTF-8 Decoder. */
 
-const char* Utf8_PushConvertFromUtf16(lua_State*L, const void* utf16)
+const char* Utf8_PushConvertFromUtf16(lua_State* L, const void* utf16)
 {
     const uint16_t* src = (const uint16_t*)utf16;
     uint8_t bytes[4];

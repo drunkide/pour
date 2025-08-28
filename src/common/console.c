@@ -45,9 +45,9 @@ void Con_Terminate()
     g_initialized = false;
 }
 
-void Con_PrintV(ConColor color, const char* fmt, va_list args)
+void Con_PrintV(lua_State* L, ConColor color, const char* fmt, va_list args)
 {
-    const char* str = lua_pushvfstring(gL, fmt, args);
+    const char* str = lua_pushvfstring(L, fmt, args);
 
   #ifdef _WIN32
 
@@ -65,7 +65,7 @@ void Con_PrintV(ConColor color, const char* fmt, va_list args)
         WriteFile(g_hStdOut, str, strlen(str), &dwBytesWritten, NULL);
     } else {
         size_t len = 0;
-        const WCHAR* str16 = (const WCHAR*)Utf8_PushConvertToUtf16(gL, str, &len);
+        const WCHAR* str16 = (const WCHAR*)Utf8_PushConvertToUtf16(L, str, &len);
 
         EnterCriticalSection(&g_criticalSection);
 
@@ -83,11 +83,11 @@ void Con_PrintV(ConColor color, const char* fmt, va_list args)
   #endif
 }
 
-void Con_PrintF(ConColor color, const char* fmt, ...)
+void Con_PrintF(lua_State* L, ConColor color, const char* fmt, ...)
 {
     va_list args;
 
     va_start(args, fmt);
-    Con_PrintV(color, fmt, args);
+    Con_PrintV(L, color, fmt, args);
     va_end(args);
 }

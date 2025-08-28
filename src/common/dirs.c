@@ -127,20 +127,20 @@ void Dir_EnsureTrailingPathSeparator(char* path)
     }
 }
 
-void Dir_MakeAbsolutePath(char* path)
+void Dir_MakeAbsolutePath(lua_State* L, char* path, size_t pathMax)
 {
-    lua_State* L = gL;
-
     if (Dir_IsAbsolutePath(path))
         return;
 
-    File_PushCurrentDirectory(gL);
+    File_PushCurrentDirectory(L);
     lua_pushliteral(L, DIR_SEPARATOR);
     lua_pushstring(L, path);
     lua_concat(L, 3);
 
     size_t len;
     const char* src = lua_tolstring(L, -1, &len);
+    if (len >= pathMax)
+        luaL_error(L, "path too long: %s", src);
     memcpy(path, src, len + 1);
 
     lua_pop(L, 1);
@@ -176,7 +176,7 @@ void Dir_AppendPath(char* path, const char* element)
     strcat(path, element);
 }
 
-void Dirs_Init(void)
+void Dirs_Init(lua_State* L)
 {
   #ifdef POUR_ROOT_DIR
     strcpy(g_rootDir_, POUR_ROOT_DIR);
@@ -188,9 +188,9 @@ void Dirs_Init(void)
     Dir_RemoveLastPath(g_rootDir_); /* remove 'src' */
     Dir_FromNativeSeparators(g_rootDir_);
 
-    if (Env_PushGet("POUR_PACKAGE_DIR")) {
-        strcpy(g_installDir_, lua_tostring(gL, -1));
-        lua_pop(gL, 1);
+    if (Env_PushGet(L, "POUR_PACKAGE_DIR")) {
+        strcpy(g_installDir_, lua_tostring(L, -1));
+        lua_pop(L, 1);
     } else {
         strcpy(g_installDir_, g_rootDir_);
         Dir_AppendPath(g_installDir_, "tools");

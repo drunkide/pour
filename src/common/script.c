@@ -73,7 +73,7 @@ static int report(lua_State* L, int status)
         const char* msg = lua_tostring(L, -1);
         if (msg == NULL || !*msg)
             msg = "(error message not a string)";
-        Con_PrintF(COLOR_ERROR, "ERROR: %s\n", msg);
+        Con_PrintF(L, COLOR_ERROR, "ERROR: %s\n", msg);
         lua_pop(L, 1);
     }
     return status;
@@ -96,9 +96,8 @@ static int docall(lua_State* L, int narg, int nres)
     return status;
 }
 
-bool Script_DoFile(const char* name, const char* chdir, int globalsTableIdx)
+bool Script_DoFile(lua_State* L, const char* name, const char* chdir, int globalsTableIdx)
 {
-    lua_State* L = gL;
     int n = lua_gettop(L);
 
     File_PushCurrentDirectory(L);
@@ -106,7 +105,7 @@ bool Script_DoFile(const char* name, const char* chdir, int globalsTableIdx)
 
     char path[DIR_MAX];
     strcpy(path, name);
-    Dir_MakeAbsolutePath(path);
+    Dir_MakeAbsolutePath(L, path, sizeof(path));
     Dir_FromNativeSeparators(path);
     Dir_RemoveLastPath(path);
 
@@ -189,14 +188,14 @@ static int pmain(lua_State *L)
         params->argv[0] = (char*)Utf8_PushConvertFromUtf16(L, buf);
   #endif
 
-    Dirs_Init();
+    Dirs_Init(L);
 
     lua_pushstring(L, g_rootDir); lua_setglobal(L, "ROOT_DIR");
     lua_pushstring(L, g_installDir); lua_setglobal(L, "INSTALL_DIR");
     lua_pushstring(L, g_dataDir); lua_setglobal(L, "DATA_DIR");
     lua_pushstring(L, g_packagesDir); lua_setglobal(L, "PACKAGES_DIR");
 
-    Exec_Init();
+    Exec_Init(L);
 
     luaL_openlibs(L);
     Pour_InitLua(L);
@@ -212,7 +211,7 @@ static int pmain(lua_State *L)
     lua_gc(L, LUA_GCRESTART);  /* start GC... */
     lua_gc(L, LUA_GCGEN, 0, 0);  /* ...in generational mode */
 
-    if (!params->pfnMain(params->argc, params->argv))
+    if (!params->pfnMain(L, params->argc, params->argv))
         return 0;
 
     lua_pushboolean(L, 1);  /* signal no errors */
