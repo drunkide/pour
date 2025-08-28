@@ -83,9 +83,19 @@ static int report(lua_State* L, int status)
         const char* msg = lua_tostring(L, -1);
         if (msg == NULL || !*msg)
             msg = "(error message not a string)";
-        Con_PrintF(L, COLOR_ERROR, "ERROR: %s\n", msg);
-        lua_pop(L, 1);
+
+        const char* p = strstr(msg, "\nstack traceback");
+        if (!p) {
+            Con_PrintF(L, COLOR_ERROR, "\nERROR: %s\n", msg);
+            lua_pop(L, 1);
+        } else {
+            lua_pushlstring(L, msg, (size_t)(p - msg));
+            Con_PrintF(L, COLOR_ERROR, "\nERROR: %s\n", lua_tostring(L, -1));
+            Con_Print(L, COLOR_TRACEBACK, p + 1);
+            lua_pop(L, 2);
+        }
     }
+
     return status;
 }
 

@@ -167,7 +167,7 @@ void File_QueryInfo(lua_State* L, const char* path, bool* outIsDir, uint64_t* ou
 
     WIN32_FILE_ATTRIBUTE_DATA data;
     if (!GetFileAttributesExW(wpath, GetFileExInfoStandard, &data))
-        luaL_error(L, "can't stat \"%s\" (code %p)\n", path, (void*)(size_t)GetLastError());
+        luaL_error(L, "can't stat \"%s\" (code %p)", path, (void*)(size_t)GetLastError());
 
     lua_pop(L, 1);
 
@@ -180,7 +180,7 @@ void File_QueryInfo(lua_State* L, const char* path, bool* outIsDir, uint64_t* ou
 
     struct stat st;
     if (stat(path, &st) < 0)
-        luaL_error(L, "can't stat \"%s\": %s\n", path, strerror(errno));
+        luaL_error(L, "can't stat \"%s\": %s", path, strerror(errno));
 
     if (outIsDir)
         *outIsDir = S_ISDIR(st.st_mode);
@@ -226,7 +226,7 @@ Dir* File_PushOpenDir(lua_State* L, const char* path)
     errno = 0;
     dir->handle = opendir(path); /* FIXME: utf-8 */
     if (!dir->handle)
-        luaL_error(L, "can't open dir \"%s\": %s\n", path, strerror(errno));
+        luaL_error(L, "can't open dir \"%s\": %s", path, strerror(errno));
 
     return dir;
 }
@@ -245,7 +245,7 @@ const char* File_ReadDir(Dir* dir)
     struct dirent* e = readdir(dir->handle);
     if (!e) {
         if (errno)
-            luaL_error(dir->L, "can't read dir \"%s\": %s\n", dir->name, strerror(errno));
+            luaL_error(dir->L, "can't read dir \"%s\": %s", dir->name, strerror(errno));
         return NULL;
     }
     return e->d_name;
