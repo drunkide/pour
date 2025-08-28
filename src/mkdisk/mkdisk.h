@@ -17,7 +17,9 @@ STRUCT(Disk) {
     Disk* next;
     lua_State* L;
     const struct disk_config_t* config;
+    const char* name;
     const char* outFile;
+    lua_Integer ref;
     fs_t fs;
     bool mbrFAT;
     bool fatEnableLFN;

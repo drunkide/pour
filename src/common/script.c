@@ -21,10 +21,20 @@
 #endif
 
 lua_State* gL;
+
+static bool g_exited;
+static bool g_cleanExit;
+
 static const char* g_currentScriptDir;
 static volatile int g_inCall;
 
 /********************************************************************************************************************/
+
+bool Script_IsAbnormalTermination(lua_State* L)
+{
+    DONT_WARN_UNUSED(L);
+    return g_exited && !g_cleanExit;
+}
 
 void Script_GetString(lua_State* L, int index, char* buf, size_t bufSize, const char* error)
 {
@@ -304,7 +314,10 @@ int Script_RunVM(int argc, char** argv, PFNMainProc pfnMain)
     int result = lua_toboolean(L, -1);
     report(L, status);
 
+    g_exited = true;
+    g_cleanExit = (result && status == LUA_OK);
+
     lua_close(L);
 
-    return (result && status == LUA_OK ? EXIT_SUCCESS : EXIT_FAILURE);
+    return (g_cleanExit ? EXIT_SUCCESS : EXIT_FAILURE);
 }

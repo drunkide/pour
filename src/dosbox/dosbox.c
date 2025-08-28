@@ -1,5 +1,6 @@
 #include <common/console.h>
 #include <common/file.h>
+#include <mkdisk/mkdisk.h>
 #include <pour/pour.h>
 #include <stdio.h>
 #include <string.h>

@@ -2,6 +2,7 @@
 #include <common/file.h>
 #include <common/console.h>
 #include <common/dirs.h>
+#include <common/script.h>
 #include <mkdisk/mkdisk.h>
 #include <mkdisk/vhd.h>
 #include <mkdisk/mbr.h>
@@ -435,7 +436,8 @@ static int mkdisk_add_directory(lua_State* L)
 static int mkdisk_make_directory(lua_State* L)
 {
     Disk* dsk = (Disk*)luaL_checkudata(L, 1, CLASS_DISK);
-    const DiskDir* dstDir = MkDisk_GetDirectory(L, 2);
+    const int dstDirIndex = 2;
+    const DiskDir* dstDir = MkDisk_GetDirectory(L, dstDirIndex);
     const char* name = luaL_checkstring(L, 3);
 
     if (dstDir->disk != dsk)
@@ -447,7 +449,7 @@ static int mkdisk_make_directory(lua_State* L)
     meta.type_and_perm = EXT2_TYPE_DIRECTORY | 0755;
     meta.uid = 0;
     meta.gid = 0;
-    MkDisk_PushMakeDir(dsk, dstDir, 1, name, &meta);
+    MkDisk_PushMakeDir(dsk, dstDir, dstDirIndex, name, &meta);
 
     return 1;
 }
@@ -579,7 +581,7 @@ static int mkdisk_destructor(lua_State* L)
 
     MkDisk_RemoveDiskFromList(dsk);
 
-    if (!dsk->built)
+    if (!dsk->built && !Script_IsAbnormalTermination(L))
         MkDisk_WriteDefault(dsk);
 
     return 0;
@@ -600,6 +602,9 @@ static const luaL_Reg disk_funcs[] = {
     { NULL, NULL }
 };
 
+const int USERVAL_FILE_NAME = 1;
+const int USERVAL_ROOT_DIRECTORY = 2;
+
 static int mkdisk_create(lua_State* L)
 {
     int nameIndex = 1;
@@ -611,6 +616,7 @@ static int mkdisk_create(lua_State* L)
     int resultIdx = lua_gettop(L);
 
     dsk->L = L;
+    dsk->name = NULL;
     dsk->mbrFAT = false;
     dsk->fatEnableLFN = false;
     dsk->inList = false;
@@ -621,7 +627,7 @@ static int mkdisk_create(lua_State* L)
     char fileName[DIR_MAX];
     Script_GetString(L, nameIndex, fileName, sizeof(fileName), "disk file name is too long");
     dsk->outFile = Dir_PushAbsolutePath(L, fileName);
-    lua_setiuservalue(L, resultIdx, 1);
+    lua_setiuservalue(L, resultIdx, USERVAL_FILE_NAME);
 
     if (!strcmp(size, "3m"))
         dsk->config = &disk_3M;
@@ -663,7 +669,7 @@ static int mkdisk_create(lua_State* L)
 
     lua_newtable(L);
     lua_pushvalue(L, -1);
-    lua_setiuservalue(L, resultIdx, 2);
+    lua_setiuservalue(L, resultIdx, USERVAL_ROOT_DIRECTORY);
 
     FSDir* root = NULL;
     switch (dsk->fs) {
@@ -698,10 +704,54 @@ static int mkdisk_create(lua_State* L)
     return 2;
 }
 
+static int mkdisk_create_named(lua_State* L)
+{
+    const char* name = luaL_checkstring(L, 1);
+    lua_pushvalue(L, 1);
+    luaL_ref(L, LUA_REGISTRYINDEX);
+    lua_remove(L, 1);
+
+    int ret = mkdisk_create(L);
+    DONT_WARN_UNUSED(ret);
+    assert(ret == 2);
+
+    Disk* dsk = (Disk*)luaL_checkudata(L, -2, CLASS_DISK);
+    dsk->name = name;
+    lua_pushvalue(L, -2);
+    dsk->ref = luaL_ref(L, LUA_REGISTRYINDEX);
+
+    return 2;
+}
+
+static int mkdisk_get_disk(lua_State* L)
+{
+    const char* name = luaL_checkstring(L, 1);
+
+    DiskList* list;
+    lua_rawgetp(L, LUA_REGISTRYINDEX, &marker_LIST);
+    if (lua_isnoneornil(L, -1))
+        goto notfound;
+    list = (DiskList*)lua_touserdata(L, -1);
+    lua_pop(L, 1);
+
+    for (Disk* dsk = list->first; dsk; dsk = dsk->next) {
+        if (dsk->name && !strcmp(dsk->name, name)) {
+            lua_rawgeti(L, LUA_REGISTRYINDEX, dsk->ref);
+            lua_getiuservalue(L, -1, USERVAL_ROOT_DIRECTORY);
+            return 2;
+        }
+    }
+
+  notfound:
+    return luaL_error(L, "disk named \"%s\" was not found.", name);
+}
+
 /****************************************************************************/
 
 static const luaL_Reg funcs[] = {
     { "create", mkdisk_create },
+    { "create_named", mkdisk_create_named },
+    { "get_disk", mkdisk_get_disk },
     { NULL, NULL }
 };
 
