@@ -12,7 +12,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <signal.h>
-#include <malloc.h>
 #include "functions.lua.h"
 
 #ifdef _WIN32
@@ -200,9 +199,12 @@ static int pmain(lua_State *L)
         LocalFree(wargv);
     }
 
-    WCHAR* buf = (WCHAR*)alloca(sizeof(WCHAR) * MAX_PATH);
-    if (GetModuleFileNameW(NULL, buf, MAX_PATH))
-        params->argv[0] = (char*)Utf8_PushConvertFromUtf16(L, buf);
+    WCHAR* buf = (WCHAR*)lua_newuserdatauv(L, sizeof(WCHAR) * MAX_PATH, 0);
+    DWORD filenameLen = GetModuleFileNameW(NULL, buf, MAX_PATH);
+    if (filenameLen == 0 || filenameLen == MAX_PATH)
+        luaL_error(L, "GetModuleFileName() failed (code %p).", (void*)(size_t)GetLastError());
+    params->argv[0] = (char*)Utf8_PushConvertFromUtf16(L, buf);
+    lua_replace(L, -2);
   #endif
 
     Dirs_Init(L);

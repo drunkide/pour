@@ -5,7 +5,6 @@
 #include <common/utf8.h>
 #include <string.h>
 #include <stdlib.h>
-#include <malloc.h>
 
 #ifdef _WIN32
 #ifndef _WIN32_WINNT
@@ -116,19 +115,17 @@ bool Exec_Command(lua_State* L, const char* const* argv, int argc, const char* c
 
 bool Exec_CommandV(lua_State* L, const char* command, const char* const* argv, int argc, const char* chdir, bool wait)
 {
+    int start = lua_gettop(L);
+
     luaL_checkstack(L, 100, NULL);
 
   #ifdef _WIN32
     size_t commandLen = strlen(command);
-    char* commandBuf = (char*)alloca(commandLen + 1);
+    char* commandBuf = (char*)lua_newuserdatauv(L, commandLen + 1, 0);
     memcpy(commandBuf, command, commandLen);
     commandBuf[commandLen] = 0;
     Dir_ToNativeSeparators(commandBuf);
     command = commandBuf;
-  #endif
-
-    int start = lua_gettop(L);
-  #ifdef _WIN32
     lua_pushliteral(L, "cmd /C ");
   #endif
     pushArgument(L, command);

@@ -9,7 +9,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <malloc.h>
 
 #define DEFAULT_EXECUTABLE_ID "_default_"
 char PACKAGE_DIR;
@@ -103,10 +102,11 @@ static bool loadPackageConfig(Package* pkg, const char* package)
 
           #ifdef _WIN32
             ++strLen;
-            char* buf = alloca(strLen);
+            char* buf = (char*)lua_newuserdatauv(L, strLen, 0);
             memcpy(buf, str, strLen);
             Dir_ToNativeSeparators(buf);
             str = buf;
+            lua_replace(L, -2);
           #else
             (void)strLen;
           #endif
@@ -214,7 +214,7 @@ bool Pour_Run(lua_State* L, const char* package, const char* chdir, int argc, ch
     const char* colon = strchr(package, ':');
     if (colon) {
         size_t len = colon - package;
-        char* buf = (char*)alloca(len + 1);
+        char* buf = (char*)lua_newuserdatauv(L, len + 1, 0);
         memcpy(buf, package, len);
         buf[len] = 0;
         executable = colon + 1;

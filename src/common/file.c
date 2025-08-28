@@ -5,7 +5,6 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <stdio.h>
-#include <malloc.h>
 #include <io.h>
 #include <limits.h>
 

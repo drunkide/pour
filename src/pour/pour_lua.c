@@ -4,7 +4,6 @@
 #include <common/dirs.h>
 #include <common/file.h>
 #include <common/utf8.h>
-#include <malloc.h>
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -69,7 +68,7 @@ static int pour_shell_open(lua_State* L)
   #ifdef _WIN32
 
     ++fileLen;
-    char* ptr = (char*)alloca(fileLen);
+    char* ptr = (char*)lua_newuserdatauv(L, fileLen, 0);
     memcpy(ptr, file, fileLen);
     Dir_ToNativeSeparators(ptr);
 
