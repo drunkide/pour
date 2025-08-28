@@ -60,6 +60,7 @@ set(src
     mkdisk/ext2.c
     mkdisk/ext2.h
     mkdisk/ext2_defs.h
+    mkdisk/ext2read.c
     mkdisk/fat.c
     mkdisk/fat.h
     mkdisk/fat_defs.h
