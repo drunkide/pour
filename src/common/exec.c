@@ -116,6 +116,7 @@ bool Exec_Command(lua_State* L, const char* const* argv, int argc, const char* c
 bool Exec_CommandV(lua_State* L, const char* command, const char* const* argv, int argc, const char* chdir, bool wait)
 {
     int start = lua_gettop(L);
+    int argStart = start;
 
     luaL_checkstack(L, 100, NULL);
 
@@ -126,6 +127,7 @@ bool Exec_CommandV(lua_State* L, const char* command, const char* const* argv, i
     commandBuf[commandLen] = 0;
     Dir_ToNativeSeparators(commandBuf);
     command = commandBuf;
+    ++argStart;
     lua_pushliteral(L, "cmd /C ");
   #endif
     pushArgument(L, command);
@@ -133,7 +135,7 @@ bool Exec_CommandV(lua_State* L, const char* command, const char* const* argv, i
         lua_pushliteral(L, " ");
         pushArgument(L, argv[i]);
     }
-    lua_concat(L, lua_gettop(L) - start);
+    lua_concat(L, lua_gettop(L) - argStart);
     const char* cmd = lua_tostring(L, -1);
 
     if (!g_dont_print_commands)
