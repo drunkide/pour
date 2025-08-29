@@ -3,7 +3,7 @@
 
 #include <mkdisk/mkdisk.h>
 
-void Fat_Init(Disk* dsk, const uint8_t* bootCode, FSDir** outRoot);
+Fat* Fat_Init(Disk* dsk, const uint8_t* bootCode, FSDir** outRoot);
 void fat_normalize_name(char* dst, const char* name);
 FSDir* fat_create_directory(FSDir* parent, const char* name);
 void fat_add_file(FSDir* parent, const char* name, const void* data, size_t size);

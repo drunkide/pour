@@ -37,19 +37,26 @@ struct FSDir {
     fat_direntry entries[MAX_DIR_ENTRIES];
 };
 
+struct Fat {
+    /* FIXME */
+    int x;
+};
+
 static size_t fatSize;
 static uint16_t* fat;
 static FSDir root_dir;
 static FSDir* last_dir;
 
-void Fat_Init(Disk* dsk, const uint8_t* bootCode, FSDir** outRoot)
+Fat* Fat_Init(Disk* dsk, const uint8_t* bootCode, FSDir** outRoot)
 {
+    lua_State* L = dsk->L;
     const disk_config_t* disk_config = dsk->config;
 
+    Fat* fatT = (Fat*)lua_newuserdatauv(L, sizeof(Fat), 0);
+
     if (sizeof(fat_bootsector) != VHD_SECTOR_SIZE) {
-        fprintf(stderr, "invalid boot sector size (%lu) - expected %lu.\n",
-            (unsigned long)sizeof(fat_bootsector), (unsigned long)VHD_SECTOR_SIZE);
-        exit(1);
+        luaL_error(L, "invalid boot sector size (%I) - expected %I.",
+            (lua_Integer)sizeof(fat_bootsector), (lua_Integer)VHD_SECTOR_SIZE);
     }
 
     fatSize = FAT_SIZE;
@@ -93,6 +100,8 @@ void Fat_Init(Disk* dsk, const uint8_t* bootCode, FSDir** outRoot)
     root_dir.disk = dsk; /* FIXME */
     last_dir = &root_dir;
     *outRoot = &root_dir;
+
+    return fatT;
 }
 
 #define IS_LFN(ch) \

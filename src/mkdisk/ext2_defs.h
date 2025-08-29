@@ -137,7 +137,7 @@ STRUCT(ext2_direntry) {
 
 #pragma pack(pop)
 
-#define EXT2_BLOCKGROUP_FOR_INODE(inode) (((inode) - 1) / (ext2_superblock.inodes_per_group))
-#define EXT2_INODE_INDEX(inode) (((inode) - 1) % (ext2_superblock.inodes_per_group))
+#define EXT2_BLOCKGROUP_FOR_INODE(superblock, inode) (((inode) - 1) / ((superblock).inodes_per_group))
+#define EXT2_INODE_INDEX(superblock, inode) (((inode) - 1) % ((superblock).inodes_per_group))
 
 #endif

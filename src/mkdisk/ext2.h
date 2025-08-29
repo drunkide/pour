@@ -8,9 +8,9 @@ STRUCT(ext2_meta) {
     unsigned uid, gid;
 };
 
-void Ext2_Init(Disk* dsk, FSDir** outRoot);
-FSDir* ext2_create_directory(FSDir* parent, const char* name, const ext2_meta* meta);
-void ext2_add_file(FSDir* parent, const char* name, const void* data, size_t size, const ext2_meta* meta);
-void Ext2_Write(Disk* dsk);
+Ext2* Ext2_Init(Disk* dsk, FSDir** outRoot);
+FSDir* Ext2_CreateDirectory(Ext2* e2, FSDir* parent, const char* name, const ext2_meta* meta);
+void Ext2_AddFile(Ext2* e2, FSDir* parent, const char* name, const void* data, size_t size, const ext2_meta* meta);
+void Ext2_Write(Ext2* e2);
 
 #endif

@@ -10,6 +10,8 @@ typedef enum fs_t {
 
 struct disk_config_t;
 
+STRUCT(Ext2);
+STRUCT(Fat);
 STRUCT(FSDir);
 
 STRUCT(Disk) {
@@ -19,6 +21,8 @@ STRUCT(Disk) {
     const struct disk_config_t* config;
     const char* name;
     const char* outFile;
+    Fat* fat;
+    Ext2* ext2;
     lua_Integer ref;
     fs_t fs;
     bool mbrFAT;

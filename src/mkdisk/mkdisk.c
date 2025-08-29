@@ -184,7 +184,7 @@ static const DiskDir* MkDisk_PushMakeDir(Disk* dsk, int dskIndex, const DiskDir*
         FSDir* dir = NULL;
         switch (dsk->fs) {
             case FS_FAT: dir = fat_create_directory(parentDir->dir, dirName); break;
-            case FS_EXT2: dir = ext2_create_directory(parentDir->dir, dirName, meta); break;
+            case FS_EXT2: dir = Ext2_CreateDirectory(dsk->ext2, parentDir->dir, dirName, meta); break;
         }
 
         subdir = MkDisk_PushDirectory(dsk, dskIndex, dir, parentIndex, fatShortName, dirName, newPath);
@@ -247,7 +247,7 @@ static void MkDisk_AddFile(Disk* dsk, const DiskDir* dstDir,
         case FS_EXT2: {
             ext2_meta meta;
             MkDisk_ReadMetaFileForFile(dsk, fileName, &meta);
-            ext2_add_file(dstDir->dir, name, ptr, fileSize, &meta);
+            Ext2_AddFile(dsk->ext2, dstDir->dir, name, ptr, fileSize, &meta);
             break;
         }
     }
@@ -285,7 +285,7 @@ void MkDisk_AddFileContent(Disk* dsk, const DiskDir* dstDir,
             meta.type_and_perm = EXT2_TYPE_FILE | 0644;
             meta.uid = 0;
             meta.gid = 0;
-            ext2_add_file(dstDir->dir, name, data, dataLen, &meta);
+            Ext2_AddFile(dsk->ext2, dstDir->dir, name, data, dataLen, &meta);
             break;
         }
     }
@@ -495,7 +495,7 @@ static void MkDisk_EnsureDiskBuilt(Disk* dsk)
         GrpFile_WriteAllForDisk(dsk);
         switch (dsk->fs) {
             case FS_FAT: Fat_Write(dsk); break;
-            case FS_EXT2: Ext2_Write(dsk); break;
+            case FS_EXT2: Ext2_Write(dsk->ext2); break;
         }
         dsk->built = true;
     }
@@ -607,6 +607,7 @@ static const luaL_Reg disk_funcs[] = {
 
 #define USERVAL_FILE_NAME 1
 #define USERVAL_ROOT_DIRECTORY 2
+#define USERVAL_FILESYSTEM 3
 
 static int mkdisk_create(lua_State* L)
 {
@@ -615,13 +616,15 @@ static int mkdisk_create(lua_State* L)
     const char* size = luaL_checkstring(L, 2);
     const char* boot = luaL_checkstring(L, 3);
 
-    Disk* dsk = (Disk*)lua_newuserdatauv(L, sizeof(Disk), 2);
+    Disk* dsk = (Disk*)lua_newuserdatauv(L, sizeof(Disk), 3);
     int resultIdx = lua_gettop(L);
 
     dsk->L = L;
     dsk->name = NULL;
     dsk->mbrFAT = false;
     dsk->fatEnableLFN = false;
+    dsk->ext2 = NULL;
+    dsk->fat = NULL;
     dsk->inList = false;
     dsk->built = false;
 
@@ -676,9 +679,10 @@ static int mkdisk_create(lua_State* L)
 
     FSDir* root = NULL;
     switch (dsk->fs) {
-        case FS_FAT: Fat_Init(dsk, bootCode, &root); break;
-        case FS_EXT2: Ext2_Init(dsk, &root); break;
+        case FS_FAT: dsk->fat = Fat_Init(dsk, bootCode, &root); break;
+        case FS_EXT2: dsk->ext2 = Ext2_Init(dsk, &root); break;
     }
+    lua_setiuservalue(L, resultIdx, USERVAL_FILESYSTEM);
     MkDisk_PushDirectory(dsk, resultIdx, root, lua_absindex(L, -1), "/", "/", "");
 
     DiskList* list;

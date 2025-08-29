@@ -37,11 +37,11 @@ static bool g_verbose;
 
 static const ext2_inode* get_inode(size_t inode_no)
 {
-    size_t blockgroup_no = EXT2_BLOCKGROUP_FOR_INODE(inode_no);
+    size_t blockgroup_no = EXT2_BLOCKGROUP_FOR_INODE(ext2_superblock, inode_no);
     ext2_blockgroupdesc* blockgroup = &g_blockgroups[blockgroup_no];
 
     const ext2_inode* inode_table = (const ext2_inode*)(g_disk + blockgroup->inode_table_blockno * g_blocksize);
-    return &inode_table[EXT2_INODE_INDEX(inode_no)];
+    return &inode_table[EXT2_INODE_INDEX(ext2_superblock, inode_no)];
 }
 
 static void begin(lua_State* L, stream_t* stream, const ext2_inode* inode)
