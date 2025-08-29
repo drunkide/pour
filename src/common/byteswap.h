@@ -1,12 +1,18 @@
 #ifndef COMMON_BYTESWAP_H
 #define COMMON_BYTESWAP_H
 
+#ifdef __GNUC__
+__attribute__((unused))
+#endif
 static uint16_t MSB16(uint16_t value)
 {
     return (((value     ) & 0xFF) << 8)
          | (((value >> 8) & 0xFF)      );
 }
 
+#ifdef __GNUC__
+__attribute__((unused))
+#endif
 static uint32_t MSB32(uint32_t value)
 {
     return (((value      ) & 0xFF) << 24)
@@ -15,6 +21,9 @@ static uint32_t MSB32(uint32_t value)
          | (((value >> 24) & 0xFF)      );
 }
 
+#ifdef __GNUC__
+__attribute__((unused))
+#endif
 static uint64_t MSB64(uint64_t value)
 {
     return (((value      ) & 0xFF) << 56)

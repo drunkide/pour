@@ -7,6 +7,7 @@
 #include <grp/grpfile.h>
 #include <dosbox/dosbox.h>
 #include <mkdisk/mkdisk.h>
+#include <mkdisk/ext2read.h>
 #include <patch/patch.h>
 #include <pour/pour_lua.h>
 #include <lualib.h>
@@ -277,6 +278,7 @@ static int pmain(lua_State *L)
     Patch_InitLua(L);
     GrpFile_InitLua(L);
     DOSBox_InitLua(L);
+    Ext2Read_InitLua(L);
 
     int status = luaL_loadbuffer(L, (const char*)functions_lua, sizeof(functions_lua), "@functions.lua");
     if (report(L, status) != 0)
