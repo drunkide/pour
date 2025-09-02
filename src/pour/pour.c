@@ -458,8 +458,14 @@ bool Pour_Main(lua_State* L, int argc, char** argv)
 
         if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
           help:
-            Con_PrintF(L, COLOR_DEFAULT, "usage: pour [options] package...\n");
-            Con_PrintF(L, COLOR_DEFAULT, "    or pour --run package [options]\n");
+            Con_Print(L, COLOR_DEFAULT, "usage: pour [options] package...\n");
+            Con_Print(L, COLOR_DEFAULT, "    or pour [options] --run package [args...]\n");
+            Con_Print(L, COLOR_DEFAULT, "    or pour [options] --script file [args...]\n");
+            Con_Print(L, COLOR_DEFAULT, "\n");
+            Con_Print(L, COLOR_DEFAULT, "where options are:\n");
+            Con_Print(L, COLOR_DEFAULT, " --chdir <path>         set working directory before performing action.\n");
+            Con_Print(L, COLOR_DEFAULT, " --dont-print-commands  avoid displaying commands to be executed.\n");
+            Con_Print(L, COLOR_DEFAULT, "\n");
             return false;
         } else {
             Con_PrintF(L, COLOR_ERROR, "ERROR: invalid command line argument \"%s\".\n", argv[i]);

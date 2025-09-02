@@ -10,6 +10,11 @@
 #include <errno.h>
 #include <dirent.h>
 
+#include <llimits.h>
+#include <lapi.h>
+#include <lstring.h>
+#include <lobject.h>
+
 #ifndef _WIN32
 #include <unistd.h>
 #endif
@@ -754,6 +759,29 @@ char* File_PushContents(lua_State* L, const char* path, size_t* outSize)
         *outSize = fileSize;
 
     return buf;
+}
+
+const char* File_PushContentsAsString(lua_State* L, const char* path)
+{
+    File* file = File_PushOpen(L, path, FILE_OPEN_SEQUENTIAL_READ);
+
+    size_t fileSize = File_GetSize(file);
+    if (fileSize <= LUAI_MAXSHORTLEN) {
+        char buf[LUAI_MAXSHORTLEN];
+        File_Read(file, buf, fileSize);
+        lua_pushlstring(L, buf, fileSize);
+    } else {
+        TString* ts = luaS_createlngstrobj(L, fileSize);
+        setsvalue2s(L, L->top.p, ts);
+        api_incr_top(L);
+        luaC_checkGC(L);
+        File_Read(file, getlngstr(ts), fileSize);
+    }
+
+    File_Close(file);
+    lua_remove(L, -2);
+
+    return lua_tostring(L, -1);
 }
 
 void File_Overwrite(lua_State* L, const char* path, const void* data, size_t size)

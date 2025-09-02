@@ -30,6 +30,13 @@ static int pour_file_exists(lua_State* L)
     return 1;
 }
 
+static int pour_file_read(lua_State* L)
+{
+    const char* file = luaL_checkstring(L, 1);
+    File_PushContentsAsString(L, file);
+    return 1;
+}
+
 static int pour_fetch(lua_State* L)
 {
     const char* package = luaL_checkstring(L, 1);
@@ -130,6 +137,7 @@ static int pour_shell_open(lua_State* L)
 static const luaL_Reg funcs[] = {
     { "chdir", pour_chdir },
     { "file_exists", pour_file_exists },
+    { "file_read", pour_file_read },
     { "fetch", pour_fetch },
     { "require", pour_require },
     { "run", pour_run },

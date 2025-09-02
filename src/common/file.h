@@ -39,6 +39,7 @@ void File_Read(File* file, void* buf, size_t size);
 void File_Write(File* file, const void* buf, size_t size);
 
 char* File_PushContents(lua_State* L, const char* path, size_t* outSize);
+const char* File_PushContentsAsString(lua_State* L, const char* path);
 void File_Overwrite(lua_State* L, const char* path, const void* data, size_t size);
 void File_OverwriteSparse(lua_State* L, const char* path, const void* data, size_t size);
 bool File_MaybeOverwrite(lua_State* L, const char* path, const void* newData, size_t newSize);
