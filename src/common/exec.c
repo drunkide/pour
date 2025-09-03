@@ -110,7 +110,7 @@ static void pushArgument(lua_State* L, const char* argument)
 
 bool Exec_Command(lua_State* L, const char* const* argv, int argc, const char* chdir)
 {
-    return Exec_CommandV(L, argv[0], argv, argc, chdir, true);
+    return Exec_CommandV(L, argv[0], argv, argc, chdir, RUN_WAIT);
 }
 
 bool Exec_CommandV(lua_State* L, const char* command, const char* const* argv, int argc,
