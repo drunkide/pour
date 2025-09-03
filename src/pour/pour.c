@@ -294,9 +294,10 @@ bool Pour_Run(lua_State* L, const char* package, const char* chdir, int argc, ch
     }
 
     if (pkg.ADJUST_ARG) {
-        for (int i = 1; i < argc; i++) {
+        const char* prev = NULL;
+        for (int i = 1; i < argc; prev = argv[i], i++) {
             if (argv[i][0] != '-') {
-                if (strpbrk(argv[i], "./\\:") != NULL) {
+                if (strpbrk(argv[i], "./\\:") != NULL || (prev && !strcmp(prev, "-o"))) {
                     char* path = (char*)lua_newuserdatauv(L, DIR_MAX, 0);
                     strcpy(path, argv[i]);
                     Dir_MakeAbsolutePath(L, path, DIR_MAX);
