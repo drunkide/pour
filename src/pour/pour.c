@@ -15,6 +15,8 @@
 char PACKAGE_DIR;
 char ARG;
 
+static const char* g_pourExecutable;
+
 /********************************************************************************************************************/
 
 STRUCT(Package) {
@@ -134,6 +136,22 @@ static bool loadPackageConfig(Package* pkg, const char* package)
         }
     }
 
+    getGlobal(pkg, "EXTRA_DEPS");
+    if (lua_isnoneornil(L, -1))
+        lua_pop(L, 1);
+    else {
+        lua_pushnil(L);
+        while (lua_next(L, -2) != 0) {
+            const char* dep = lua_tostring(L, -1);
+            if (!Pour_Install(L, dep, false)) {
+                Con_PrintF(L, COLOR_ERROR,
+                    "ERROR: unable to install dependency '%s' for package '%s'.\n", dep, package);
+                return false;
+            }
+            lua_pop(L, 1);
+        }
+    }
+
     return true;
 }
 
@@ -229,6 +247,8 @@ bool Pour_Run(lua_State* L, const char* package, const char* chdir, int argc, ch
     luaL_checkstack(L, 100, NULL);
 
     lua_newtable(L);
+    lua_pushstring(L, g_pourExecutable);
+    lua_setfield(L, -2, "POUR_EXECUTABLE");
     pkg.globalsTable = lua_gettop(L);
 
     const char* executable = NULL;
@@ -309,6 +329,8 @@ bool Pour_Install(lua_State* L, const char* package, bool skipInvoke)
     pkg.L = L;
 
     lua_newtable(L);
+    lua_pushstring(L, g_pourExecutable);
+    lua_setfield(L, -2, "POUR_EXECUTABLE");
     pkg.globalsTable = lua_gettop(L);
 
     if (!ensurePackageInstalled(&pkg, package)) {
@@ -330,6 +352,8 @@ bool Pour_ExecScript(lua_State* L, const char* script, const char* chdir, int ar
     int n = lua_gettop(L);
 
     lua_newtable(L);
+    lua_pushstring(L, g_pourExecutable);
+    lua_setfield(L, -2, "POUR_EXECUTABLE");
     int globalsTableIdx = lua_gettop(L);
 
     lua_createtable(L, argc, argc);
@@ -384,6 +408,8 @@ void Pour_InvokeScript(lua_State* L, const char* script)
         dir = NULL;
 
     lua_newtable(L);
+    lua_pushstring(L, g_pourExecutable);
+    lua_setfield(L, -2, "POUR_EXECUTABLE");
     lua_rawgetp(L, LUA_REGISTRYINDEX, &ARG);
     lua_setfield(L, -2, "arg");
     int globalsTableIdx = lua_gettop(L);
@@ -407,6 +433,7 @@ bool Pour_Main(lua_State* L, int argc, char** argv)
     int n;
 
     Env_Set(L, "POUR_EXECUTABLE", argv[0]);
+    g_pourExecutable = argv[0];
 
     for (n = 1; n < argc; n++) {
         if (!strcmp(argv[n], "--dont-print-commands"))

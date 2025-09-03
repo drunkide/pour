@@ -257,3 +257,31 @@ function egcs_112(srcdir, bindir, buildtype, exe)
 end
 
 end
+----------------------------------------------------------------------------------------------------------------------
+if WINDOWS then
+
+function borland_452_generate(srcdir, bindir, buildtype, extra)
+    local e = { table.unpack(extra or {}) }
+    e[#e + 1] = srcdir
+    pour.require("make")
+    pour.require("borland-4.5.2")
+    pour.chdir(bindir)
+    pour.run('cmake-3.5.2',
+            '-G', 'MinGW Makefiles',
+            '-DCMAKE_TOOLCHAIN_FILE='..PACKAGE_DIR['borland-4.5.2']..'/toolchain.cmake',
+            '-DCMAKE_BUILD_TYPE='..buildtype,
+            table.unpack(e)
+        )
+end
+
+function borland_452(srcdir, bindir, buildtype, exe, extra)
+    pour.require("make")
+    pour.require("borland-4.5.2")
+    pour.chdir(bindir)
+    if not pour.file_exists(exe) then
+        borland_452_generate(srcdir, bindir, buildtype, extra)
+    end
+    pour.run('cmake-3.5.2', '--build', '.')
+end
+
+end
