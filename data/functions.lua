@@ -236,7 +236,7 @@ function egcs_112_generate(srcdir, bindir, buildtype)
     pour.require("make")
     pour.require("egcs-1.1.2")
     pour.chdir(bindir)
-    pour.run('cmake-3.5.2',
+    pour.run('cmake-3.31.4',
             '-G', 'MinGW Makefiles',
             '-DCMAKE_TOOLCHAIN_FILE='..PACKAGE_DIR['egcs-1.1.2']..'/tools/cmake_toolchain/linux-egcs.cmake',
             '-DCMAKE_BUILD_TYPE='..buildtype,
@@ -251,7 +251,7 @@ function egcs_112(srcdir, bindir, buildtype, exe)
     if not pour.file_exists(exe) then
         egcs_112_generate(srcdir, bindir, buildtype)
     end
-    pour.run('cmake-3.5.2', '--build', '.')
+    pour.run('cmake-3.31.4', '--build', '.')
 end
 
 end
