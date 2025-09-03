@@ -285,3 +285,31 @@ function borland_452(srcdir, bindir, buildtype, exe, extra)
 end
 
 end
+----------------------------------------------------------------------------------------------------------------------
+if WINDOWS then
+
+function watcom_10_win32_generate(srcdir, bindir, buildtype, extra)
+    local e = { table.unpack(extra or {}) }
+    e[#e + 1] = srcdir
+    pour.require("make")
+    pour.require("watcom-10.0a")
+    pour.chdir(bindir)
+    pour.run('cmake-3.31.4',
+            '-G', 'MinGW Makefiles',
+            '-DCMAKE_TOOLCHAIN_FILE='..PACKAGE_DIR['watcom-10.0a']..'/toolchain-win32.cmake',
+            '-DCMAKE_BUILD_TYPE='..buildtype,
+            table.unpack(e)
+        )
+end
+
+function watcom_10_win32(srcdir, bindir, buildtype, exe, extra)
+    pour.require("make")
+    pour.require("borland-4.5.2")
+    pour.chdir(bindir)
+    if not pour.file_exists(exe) then
+        watcom_10_win32_generate(srcdir, bindir, buildtype, extra)
+    end
+    pour.run('cmake-3.31.4', '--build', '.')
+end
+
+end
