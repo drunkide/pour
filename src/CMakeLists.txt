@@ -76,10 +76,18 @@ set(src
     mkdisk/write.h
     patch/patch.c
     patch/patch.h
+    pour/install.c
+    pour/install.h
+    pour/package.c
+    pour/package.h
     pour/pour.c
     pour/pour.h
     pour/pour_lua.c
     pour/pour_lua.h
+    pour/run.c
+    pour/run.h
+    pour/script.c
+    pour/script.h
     _main.c
     )
 

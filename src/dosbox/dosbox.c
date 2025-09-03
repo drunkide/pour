@@ -1,7 +1,7 @@
 #include <common/console.h>
 #include <common/file.h>
 #include <mkdisk/mkdisk.h>
-#include <pour/pour.h>
+#include <pour/run.h>
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>

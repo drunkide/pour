@@ -1,5 +1,8 @@
 #include <pour/pour_lua.h>
-#include <pour/pour.h>
+#include <pour/package.h>
+#include <pour/install.h>
+#include <pour/run.h>
+#include <pour/script.h>
 #include <common/script.h>
 #include <common/dirs.h>
 #include <common/file.h>
