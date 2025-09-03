@@ -324,12 +324,17 @@ File* File_PushOpen(lua_State* L, const char* path, openmode_t mode)
             dwFlags = 0;
             action = "open";
             break;
-        case FILE_CREATE_OVERWRITE:
+        case FILE_CREATE_OVERWRITE: {
+            char buf[DIR_MAX];
+            strcpy(buf, path);
+            if (Dir_RemoveLastPath(buf))
+                File_TryCreateDirectory(L, buf);
             dwDesiredAccess = GENERIC_WRITE;
             dwCreationDisposition = CREATE_ALWAYS;
             dwFlags = 0;
             action = "create";
             break;
+        }
         default:
             assert(false);
             luaL_error(L, "invalid file open mode.");
