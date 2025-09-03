@@ -37,6 +37,15 @@ static int pour_file_read(lua_State* L)
     return 1;
 }
 
+static int pour_file_write(lua_State* L)
+{
+    size_t dataLen;
+    const char* file = luaL_checkstring(L, 1);
+    const char* data = luaL_checklstring(L, 2, &dataLen);
+    File_MaybeOverwrite(L, file, data, dataLen);
+    return 0;
+}
+
 static int pour_fetch(lua_State* L)
 {
     const char* package = luaL_checkstring(L, 1);
@@ -138,6 +147,7 @@ static const luaL_Reg funcs[] = {
     { "chdir", pour_chdir },
     { "file_exists", pour_file_exists },
     { "file_read", pour_file_read },
+    { "file_write", pour_file_write },
     { "fetch", pour_fetch },
     { "require", pour_require },
     { "run", pour_run },
