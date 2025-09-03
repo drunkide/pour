@@ -140,6 +140,7 @@ function msvc20_generate(srcdir, bindir, buildtype)
     pour.run('cmake-3.5.2',
             '-G', 'NMake Makefiles',
             '-DOLD_MSVC=TRUE',
+            '-DOLD_MSVC20=TRUE',
             '-DCMAKE_BUILD_TYPE='..buildtype,
             srcdir
         )
@@ -164,6 +165,7 @@ function msvc41_generate(srcdir, bindir, buildtype)
     pour.run('cmake-3.5.2',
             '-G', 'NMake Makefiles',
             '-DOLD_MSVC=TRUE',
+            '-DOLD_MSVC41=TRUE',
             '-DCMAKE_BUILD_TYPE='..buildtype,
             srcdir
         )
