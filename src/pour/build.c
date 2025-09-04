@@ -234,7 +234,7 @@ bool Pour_LoadTarget(lua_State* L, Target* target, const char* name)
     memcpy(targetPath, name, targetLen);
     for (char* p = targetPath; *p; ++p) {
         if (*p == '/' || *p == '\\') {
-            Con_PrintF(L, COLOR_ERROR, "ERROR: unexpected '%c' in target name \"%s\".", *p, name);
+            Con_PrintF(L, COLOR_ERROR, "ERROR: unexpected '%c' in target name \"%s\".\n", *p, name);
             return false;
         }
         if (*p == ':') {
@@ -248,13 +248,13 @@ bool Pour_LoadTarget(lua_State* L, Target* target, const char* name)
                 target->configuration = p + 1;
                 continue;
             }
-            Con_PrintF(L, COLOR_ERROR, "ERROR: unexpected '%c' in target name \"%s\".", *p, name);
+            Con_PrintF(L, COLOR_ERROR, "ERROR: unexpected '%c' in target name \"%s\".\n", *p, name);
             return false;
         }
     }
 
     if (!target->platform) {
-        Con_PrintF(L, COLOR_ERROR, "ERROR: missing '%c' in target name \"%s\".", ':', name);
+        Con_PrintF(L, COLOR_ERROR, "ERROR: missing '%c' in target name \"%s\".\n", ':', name);
         return false;
     }
 
@@ -264,7 +264,7 @@ bool Pour_LoadTarget(lua_State* L, Target* target, const char* name)
                 strcmp(target->configuration, "relwithdebinfo") != 0 &&
                 strcmp(target->configuration, "minsizerel") != 0) {
             Con_PrintF(L, COLOR_ERROR,
-                "ERROR: invalid configuration \"%s\" in target name \"%s\".", target->configuration, name);
+                "ERROR: invalid configuration \"%s\" in target name \"%s\".\n", target->configuration, name);
             return false;
         }
     }
@@ -272,7 +272,7 @@ bool Pour_LoadTarget(lua_State* L, Target* target, const char* name)
     target->luaScriptDir = lua_pushfstring(L, "%s/%s", g_targetsDir, target->platform);
     target->luaScript = lua_pushfstring(L, "%s/%s.lua", target->luaScriptDir, target->compiler);
     if (!File_Exists(L, target->luaScript)) {
-        Con_PrintF(L, COLOR_ERROR, "ERROR: unknown target \"%s\".", name);
+        Con_PrintF(L, COLOR_ERROR, "ERROR: unknown target \"%s\".\n", name);
         return false;
     }
 
@@ -303,16 +303,16 @@ bool Pour_LoadTarget(lua_State* L, Target* target, const char* name)
     target->buildFn = getFunction(target, "build");
 
     if (target->prepareFn < 0 && target->generateFn < 0 && target->buildFn < 0) {
-        Con_PrintF(L, COLOR_ERROR, "ERROR: target \"%s\" is not supported on current platform.", target->name);
+        Con_PrintF(L, COLOR_ERROR, "ERROR: target \"%s\" is not supported on current platform.\n", target->name);
         return false;
     }
 
     if (target->buildFn < 0) {
-        Con_PrintF(L, COLOR_ERROR, "ERROR: target \"%s\" is missing the \"%s\" function.", target->name, "build");
+        Con_PrintF(L, COLOR_ERROR, "ERROR: target \"%s\" is missing the \"%s\" function.\n", target->name, "build");
         return false;
     }
     if (target->generateFn < 0) {
-        Con_PrintF(L, COLOR_ERROR, "ERROR: target \"%s\" is missing the \"%s\" function.", target->name, "generate");
+        Con_PrintF(L, COLOR_ERROR, "ERROR: target \"%s\" is missing the \"%s\" function.\n", target->name, "generate");
         return false;
     }
 
@@ -335,7 +335,7 @@ bool Pour_LoadTarget(lua_State* L, Target* target, const char* name)
     } else if (!strcmp(target->cmakeGenerator, "Microsoft Visual Studio 17 2022")) {
         target->isMulticonfig = true;
     } else {
-        Con_PrintF(L, COLOR_ERROR, "ERROR: unsupported CMake generator \"%s\".", target->cmakeGenerator);
+        Con_PrintF(L, COLOR_ERROR, "ERROR: unsupported CMake generator \"%s\".\n", target->cmakeGenerator);
         return false;
     }
 
@@ -344,7 +344,7 @@ bool Pour_LoadTarget(lua_State* L, Target* target, const char* name)
     if (!target->isMulticonfig && !target->configuration) {
         target->configuration = "release";
         Con_PrintF(L, COLOR_WARNING,
-            "WARNING: configuration was not specified for target \"%s\", building \"%s\".",
+            "WARNING: configuration was not specified for target \"%s\", building \"%s\".\n",
             target->name, target->configuration);
 
         target->name = lua_pushfstring(L, "%s:%s", target->name, target->configuration);
@@ -362,7 +362,7 @@ bool Pour_LoadTarget(lua_State* L, Target* target, const char* name)
 
     setGlobals(target);
     if (!loadBuildLua(L, target, NULL, NULL)) {
-        Con_PrintF(L, COLOR_ERROR, "ERROR: target \"%s\" was not found in Build.lua.", target->name);
+        Con_PrintF(L, COLOR_ERROR, "ERROR: target \"%s\" was not found in Build.lua.\n", target->name);
         return false;
     }
 
@@ -461,7 +461,7 @@ bool Pour_Build(lua_State* L, const char* targetName, buildmode_t mode)
         case BUILD_GENERATE_AND_OPEN: {
             const char* CMakeCache_txt = lua_pushfstring(L, "%s/%s", target.buildDir, "CMakeCache.txt");
             if (!File_Exists(L, CMakeCache_txt)) {
-                Con_PrintF(L, COLOR_ERROR, "ERROR: file \"%s\" was not found.", CMakeCache_txt);
+                Con_PrintF(L, COLOR_ERROR, "ERROR: file \"%s\" was not found.\n", CMakeCache_txt);
                 lua_settop(L, n);
                 return false;
             }
@@ -471,7 +471,7 @@ bool Pour_Build(lua_State* L, const char* targetName, buildmode_t mode)
             static const char param[] = "CMAKE_PROJECT_NAME:STATIC=";
             const char* p = strstr(data, param);
             if (!p) {
-                Con_PrintF(L, COLOR_ERROR, "ERROR: project name was not found in \"%s\".", CMakeCache_txt);
+                Con_PrintF(L, COLOR_ERROR, "ERROR: project name was not found in \"%s\".\n", CMakeCache_txt);
                 lua_settop(L, n);
                 return false;
             }
@@ -479,7 +479,7 @@ bool Pour_Build(lua_State* L, const char* targetName, buildmode_t mode)
             p += sizeof(param) - 1;
             const char* end = strpbrk(p, "\r\n");
             if (!end || end == p) {
-                Con_PrintF(L, COLOR_ERROR, "ERROR: can't extract project name from \"%s\".", CMakeCache_txt);
+                Con_PrintF(L, COLOR_ERROR, "ERROR: can't extract project name from \"%s\".\n", CMakeCache_txt);
                 lua_settop(L, n);
                 return false;
             }
@@ -494,7 +494,7 @@ bool Pour_Build(lua_State* L, const char* targetName, buildmode_t mode)
                 break;
             }
 
-            Con_PrintF(L, COLOR_ERROR, "ERROR: file not found: \"%s\".", slnFile);
+            Con_PrintF(L, COLOR_ERROR, "ERROR: file not found: \"%s\".\n", slnFile);
             lua_settop(L, n);
             return false;
         }

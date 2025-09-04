@@ -154,7 +154,7 @@ bool File_TryDelete(lua_State* L, const char* path)
     const WCHAR* wpath = (const WCHAR*)Utf8_PushConvertToUtf16(L, path, NULL);
     bool result = DeleteFileW(wpath);
     if (!result) {
-        Con_PrintF(L, COLOR_WARNING, "WARNING: delete of file \"%s\" failed (code %p)\n",
+        Con_PrintF(L, COLOR_WARNING, "WARNING: delete of file \"%s\" failed (code %p).\n",
             path, (void*)(size_t)GetLastError());
     }
     lua_pop(L, 1);
@@ -391,7 +391,7 @@ void File_Close(File* file)
         if (file->isSparse) {
             DWORD currentOffset = SetFilePointer(handle, 0, NULL, FILE_CURRENT);
             if (currentOffset == INVALID_SET_FILE_POINTER) {
-                Con_PrintF(file->L, COLOR_WARNING, "WARNING: SetFilePointer() failed in file \"%s\" (code %p)",
+                Con_PrintF(file->L, COLOR_WARNING, "WARNING: SetFilePointer() failed in file \"%s\" (code %p).\n",
                     file->name, (void*)(size_t)GetLastError());
                 goto err;
             }
@@ -401,7 +401,7 @@ void File_Close(File* file)
             if (loPart == INVALID_FILE_SIZE) {
                 DWORD dwError = GetLastError();
                 if (dwError != NO_ERROR) {
-                    Con_PrintF(file->L, COLOR_WARNING, "WARNING: GetFileSize() failed in file \"%s\" (code %p)",
+                    Con_PrintF(file->L, COLOR_WARNING, "WARNING: GetFileSize() failed in file \"%s\" (code %p).\n",
                         file->name, (void*)(size_t)dwError);
                 }
                 goto err;
@@ -409,7 +409,7 @@ void File_Close(File* file)
 
             if (currentOffset > loPart && hiPart == 0) {
                 if (!SetEndOfFile(handle)) {
-                    Con_PrintF(file->L, COLOR_WARNING, "WARNING: SetEndOfFile() failed in file \"%s\" (code %p)",
+                    Con_PrintF(file->L, COLOR_WARNING, "WARNING: SetEndOfFile() failed in file \"%s\" (code %p).\n",
                         file->name, (void*)(size_t)GetLastError());
                     goto err;
                 }
@@ -437,7 +437,7 @@ void File_MakeSparse(File* file)
     DWORD tmp;
     if (!DeviceIoControl(file->handle, FSCTL_SET_SPARSE, NULL, 0, NULL, 0, &tmp, NULL)) {
         Con_PrintF(file->L, COLOR_WARNING,
-            "WARNING: DeviceIoControl(FSCTL_SET_SPARSE) failed for file \"%s\" (code %p).",
+            "WARNING: DeviceIoControl(FSCTL_SET_SPARSE) failed for file \"%s\" (code %p).\n",
             file->name, (void*)(size_t)GetLastError());
         return;
     }
@@ -499,7 +499,7 @@ bool File_TrySetSize(File* file, size_t newSize)
 
     DWORD result = SetFilePointer(handle, (LONG)newSize, NULL, FILE_BEGIN);
     if (result == INVALID_SET_FILE_POINTER) {
-        Con_PrintF(L, COLOR_WARNING, "WARNING: truncate of file \"%s\" failed (code %p)\n",
+        Con_PrintF(L, COLOR_WARNING, "WARNING: truncate of file \"%s\" failed (code %p).\n",
             file->name, (void*)(size_t)GetLastError());
         return false;
     }
@@ -510,7 +510,7 @@ bool File_TrySetSize(File* file, size_t newSize)
     }
 
     if (!SetEndOfFile(handle)) {
-        Con_PrintF(L, COLOR_WARNING, "WARNING: truncate of file \"%s\" failed (code %p)\n",
+        Con_PrintF(L, COLOR_WARNING, "WARNING: truncate of file \"%s\" failed (code %p).\n",
             file->name, (void*)(size_t)GetLastError());
         return false;
     }
@@ -522,7 +522,7 @@ bool File_TrySetSize(File* file, size_t newSize)
     if (loPart == INVALID_FILE_SIZE) {
         DWORD dwError = GetLastError();
         if (dwError != NO_ERROR) {
-            Con_PrintF(L, COLOR_WARNING, "WARNING: truncate of file \"%s\" failed (code %p)\n",
+            Con_PrintF(L, COLOR_WARNING, "WARNING: truncate of file \"%s\" failed (code %p).\n",
                 file->name, (void*)(size_t)dwError);
             return false;
         }
@@ -664,7 +664,7 @@ void File_Write(File* file, const void* buf, size_t size)
             if (zeroCount >= SPARSE_THRESHOLD || (size_t)zeroCount == dwBytesToWrite) {
                 DWORD currentOffset = SetFilePointer(handle, 0, NULL, FILE_CURRENT);
                 if (currentOffset == INVALID_SET_FILE_POINTER) {
-                    Con_PrintF(L, COLOR_WARNING, "WARNING: SetFilePointer() failed in file \"%s\" (code %p)",
+                    Con_PrintF(L, COLOR_WARNING, "WARNING: SetFilePointer() failed in file \"%s\" (code %p).\n",
                         file->name, (void*)(size_t)GetLastError());
                     goto fullwrite;
                 }
@@ -675,14 +675,14 @@ void File_Write(File* file, const void* buf, size_t size)
                 DWORD tmp = 0;
                 if (!DeviceIoControl(handle, FSCTL_SET_ZERO_DATA, &zi, sizeof(zi), NULL, 0, &tmp, NULL)) {
                     Con_PrintF(L, COLOR_WARNING,
-                        "WARNING: DeviceIoControl(FSCTL_SET_ZERO_DATA) failed in file \"%s\" (code %p)",
+                        "WARNING: DeviceIoControl(FSCTL_SET_ZERO_DATA) failed in file \"%s\" (code %p).\n",
                         file->name, (void*)(size_t)GetLastError());
                     goto fullwrite;
                 }
 
                 DWORD result = SetFilePointer(handle, currentOffset + zeroCount, NULL, FILE_BEGIN);
                 if (result == INVALID_SET_FILE_POINTER) {
-                    Con_PrintF(L, COLOR_WARNING, "WARNING: SetFilePointer() failed in file \"%s\" (code %p)",
+                    Con_PrintF(L, COLOR_WARNING, "WARNING: SetFilePointer() failed in file \"%s\" (code %p).\n",
                         file->name, (void*)(size_t)GetLastError());
                     goto fullwrite;
                 }
