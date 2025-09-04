@@ -1,29 +1,42 @@
 
-----------------------------------------------------------------------------------------------------------------------
-if HOST_WINDOWS then
-
-function mingw32_440_generate(srcdir, bindir, buildtype)
-    pour.require("ninja")
-    pour.require("mingw32-4.4.0")
-    pour.chdir(bindir)
-    pour.run('cmake-3.5.2',
-            '-G', 'Ninja',
-            '-DCMAKE_BUILD_TYPE='..buildtype,
-            srcdir
-        )
-end
-
-function mingw32_440(srcdir, bindir, buildtype, exe)
-    pour.require("ninja")
-    pour.require("mingw32-4.4.0")
-    pour.chdir(bindir)
-    if not pour.file_exists(exe) then
-        mingw32_440_generate(srcdir, bindir, buildtype)
+function table_append(dst, src)
+    for _, v in ipairs(src) do
+        table.insert(dst, v)
     end
-    pour.run('cmake-3.5.2', '--build', '.')
 end
 
+function CMAKE(params)
+    local e = {}
+    if CMAKE_GENERATOR ~= '' then
+        table_append(e, { '-G', CMAKE_GENERATOR })
+    end
+    if CMAKE_PARAMS then
+        table_append(e, CMAKE_PARAMS)
+    end
+    if params then
+        table_append(e, params)
+    end
+    if not CMAKE_IS_MULTICONFIG then
+        table.insert(e, '-DCMAKE_BUILD_TYPE='..TARGET_CONFIGURATION)
+    end
+    table.insert(e, SOURCE_DIR)
+    pour.run('cmake-'..CMAKE_VERSION, table.unpack(e))
 end
+
+function CMAKE_BUILD(params)
+    local e = {}
+    if CMAKE_IS_MULTICONFIG then
+        table_append(e, { '--config', TARGET_CONFIGURATION })
+    end
+    if CMAKE_BUILD_PARAMS then
+        table_append(e, CMAKE_BUILD_PARAMS)
+    end
+    if params then
+        table_append(e, params)
+    end
+    pour.run('cmake-'..CMAKE_VERSION, '--build', '.', table.unpack(e))
+end
+
 ----------------------------------------------------------------------------------------------------------------------
 if HOST_WINDOWS then
 

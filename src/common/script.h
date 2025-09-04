@@ -13,6 +13,8 @@ void Script_Interrupt(void);
 bool Script_DoFile(lua_State* L, const char* name, const char* chdir, int globalsTableIdx);
 bool Script_DoFunction(lua_State* L, const char* scriptDir, const char* chdir, int functionIdx);
 
+bool Script_LoadFunctions(lua_State* L, int globalsTableIdx);
+
 int Script_RunVM(int argc, char** argv, PFNMainProc pfnMain);
 
 #endif

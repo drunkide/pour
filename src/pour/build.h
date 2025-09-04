@@ -8,14 +8,18 @@ STRUCT(Target) {
     const char* name;
     const char* platform;
     const char* compiler;
+    const char* configuration;
     const char* luaScript;
     const char* luaScriptDir;
     const char* buildDir;
     const char* sourceDir;
+    const char* cmakeGenerator;
+    const char* cmakeVersion;
     int globalsTableIdx;
     int prepareFn;
     int generateFn;
     int buildFn;
+    bool isMulticonfig;
 };
 
 typedef enum genmode_t {
@@ -33,7 +37,7 @@ typedef enum buildmode_t {
 
 typedef void (*PFNNAMECALLBACK)(lua_State* L, const char* name, void* data);
 
-bool Pour_LoadBuildLua(lua_State* L, PFNNAMECALLBACK callback, void* callbackData);
+void Pour_LoadBuildLua(lua_State* L, PFNNAMECALLBACK callback, void* callbackData);
 
 bool Pour_LoadTarget(lua_State* L, Target* target, const char* name);
 bool Pour_GenerateTarget(Target* target, genmode_t mode);

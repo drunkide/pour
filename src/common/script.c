@@ -152,24 +152,8 @@ static int docall(lua_State* L, int narg, int nres)
     return status;
 }
 
-bool Script_DoFile(lua_State* L, const char* name, const char* chdir, int globalsTableIdx)
+static int pushGlobals(lua_State* L, int globalsTableIdx)
 {
-    int n = lua_gettop(L);
-
-    char path[DIR_MAX];
-    strcpy(path, name); /* FIXME: possible overflow */
-    Dir_MakeAbsolutePath(L, path, sizeof(path));
-    Dir_FromNativeSeparators(path);
-    Dir_RemoveLastPath(path);
-
-    int status = report(L, luaL_loadfile(L, name)); /* FIXME: utf-8 */
-    if (status != LUA_OK) {
-        lua_settop(L, n);
-        return false;
-    }
-
-    int functionIdx = lua_gettop(L);
-
     int envIndex;
     if (globalsTableIdx != 0)                   /* new _ENV */
         envIndex = globalsTableIdx;
@@ -180,8 +164,6 @@ bool Script_DoFile(lua_State* L, const char* name, const char* chdir, int global
 
     lua_pushvalue(L, -1);
     lua_setfield(L, envIndex, "_G");            /* _ENV._G = _ENV */
-    lua_pushstring(L, path);
-    lua_setfield(L, envIndex, "SCRIPT_DIR");    /* _ENV.SCRIPT_DIR = <path> */
 
     /* copy values from globals */
     lua_pushglobaltable(L);
@@ -201,6 +183,31 @@ bool Script_DoFile(lua_State* L, const char* name, const char* chdir, int global
     }
 
     lua_pushvalue(L, envIndex);                 /* new _ENV */
+
+    return envIndex;
+}
+
+bool Script_DoFile(lua_State* L, const char* name, const char* chdir, int globalsTableIdx)
+{
+    int n = lua_gettop(L);
+
+    char path[DIR_MAX];
+    strcpy(path, name); /* FIXME: possible overflow */
+    Dir_MakeAbsolutePath(L, path, sizeof(path));
+    Dir_FromNativeSeparators(path);
+    Dir_RemoveLastPath(path);
+
+    int status = report(L, luaL_loadfile(L, name)); /* FIXME: utf-8 */
+    if (status != LUA_OK) {
+        lua_settop(L, n);
+        return false;
+    }
+
+    int functionIdx = lua_gettop(L);
+
+    int envIndex = pushGlobals(L, globalsTableIdx);
+    lua_pushstring(L, path);
+    lua_setfield(L, envIndex, "SCRIPT_DIR");    /* _ENV.SCRIPT_DIR = <path> */
     lua_setupvalue(L, functionIdx, 1);          /* set as upvalue #1 for the script */
 
     bool result = Script_DoFunction(L, path, chdir, functionIdx);
@@ -237,6 +244,25 @@ bool Script_DoFunction(lua_State* L, const char* scriptDir, const char* chdir, i
 
 /********************************************************************************************************************/
 
+bool Script_LoadFunctions(lua_State* L, int globalsTableIdx)
+{
+    int status = luaL_loadbuffer(L, (const char*)functions_lua, sizeof(functions_lua), "@functions.lua");
+    if (report(L, status) != 0)
+        return false;
+
+    if (globalsTableIdx != 0) {
+        int functionIdx = lua_gettop(L);
+        pushGlobals(L, globalsTableIdx);
+        lua_setupvalue(L, functionIdx, 1); /* set as upvalue #1 for the script */
+        lua_pushvalue(L, functionIdx);
+    }
+
+    lua_call(L, 0, 0);
+    return true;
+}
+
+/********************************************************************************************************************/
+
 STRUCT(MainParams) {
     PFNMainProc pfnMain;
     char** argv;
@@ -257,7 +283,7 @@ static int pmain(lua_State *L)
 
   #ifdef _WIN32
     lua_pushboolean(L, 1);
-    lua_setglobal(L, "WINDOWS");
+    lua_setglobal(L, "HOST_WINDOWS");
 
     int wargc;
     LPWSTR* wargv = CommandLineToArgvW(GetCommandLineW(), &wargc);
@@ -285,6 +311,7 @@ static int pmain(lua_State *L)
     lua_pushstring(L, g_installDir); lua_setglobal(L, "INSTALL_DIR");
     lua_pushstring(L, g_dataDir); lua_setglobal(L, "DATA_DIR");
     lua_pushstring(L, g_packagesDir); lua_setglobal(L, "PACKAGES_DIR");
+    lua_pushstring(L, g_targetsDir); lua_setglobal(L, "TARGETS_DIR");
 
     Exec_Init(L);
 
@@ -296,10 +323,8 @@ static int pmain(lua_State *L)
     DOSBox_InitLua(L);
     Ext2Read_InitLua(L);
 
-    int status = luaL_loadbuffer(L, (const char*)functions_lua, sizeof(functions_lua), "@functions.lua");
-    if (report(L, status) != 0)
+    if (!Script_LoadFunctions(L, 0))
         return 0;
-    lua_call(L, 0, 0);
 
     lua_gc(L, LUA_GCRESTART);  /* start GC... */
     lua_gc(L, LUA_GCGEN, 0, 0);  /* ...in generational mode */
