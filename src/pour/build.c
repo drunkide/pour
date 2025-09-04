@@ -19,36 +19,62 @@ STRUCT(BuildLuaContext)
     bool matched;
 };
 
-static void popFunction(lua_State* L)
+static void readSettings(lua_State* L, Target* targetOrNull, int globalsTableIdx)
 {
     luaL_checktype(L, 1, LUA_TTABLE);
 
-    lua_len(L, 1);
-    if (lua_tointeger(L, -1) != 1)
-        luaL_error(L, "invalid argument.");
-    lua_pop(L, 1);
-
-    lua_rawgeti(L, 1, 1);
-    if (!lua_isfunction(L, -1))
-        luaL_error(L, "invalid argument.");
+    lua_pushnil(L);
+    while (lua_next(L, -2) != 0) {
+        if (lua_isfunction(L, -1)) {
+            if (!targetOrNull)
+                lua_pop(L, 1);
+            else
+                lua_call(L, 0, 0);
+        } else if (lua_isstring(L, -1) || lua_isinteger(L, -1) || lua_isboolean(L, -1)) {
+            const char* key = luaL_checkstring(L, -2);
+            if (!targetOrNull)
+                lua_pop(L, 1);
+            else {
+                lua_getfield(L, globalsTableIdx, key);
+                if (lua_istable(L, -1))
+                    luaL_error(L, "\"%s\" is a table.", key);
+                lua_pop(L, 1);
+                lua_setfield(L, globalsTableIdx, key);
+            }
+        } else if (lua_istable(L, -1)) {
+            const char* key = luaL_checkstring(L, -2);
+            if (targetOrNull) {
+                lua_getfield(L, globalsTableIdx, "table_append");
+                lua_getfield(L, globalsTableIdx, key);
+                if (!lua_istable(L, -1))
+                    luaL_error(L, "\"%s\" is not a table.", key);
+                lua_pushvalue(L, -3);
+                lua_call(L, 2, 0);
+            }
+            lua_pop(L, 1);
+        } else
+            luaL_error(L, "invalid argument.");
+    }
 }
 
 static int fn_dummy_callback(lua_State* L)
 {
-    popFunction(L); /* validate argument */
+    readSettings(L, NULL, 0); /* just validate argument */
     return 0;
 }
 
 static int fn_action_callback(lua_State* L)
 {
-    popFunction(L);
-    lua_call(L, 0, 0);
+    BuildLuaContext* context = (BuildLuaContext*)lua_touserdata(L, lua_upvalueindex(1));
+    int globalsTableIdx = lua_upvalueindex(2);
+    readSettings(L, context->targetOrNull, globalsTableIdx);
     return 0;
 }
 
 static int fn_target(lua_State* L)
 {
     BuildLuaContext* context = (BuildLuaContext*)lua_touserdata(L, lua_upvalueindex(1));
+    int globalsTableIdx = lua_upvalueindex(2);
     const char* name = luaL_checkstring(L, 1);
 
     if (context->nameCallback)
@@ -68,7 +94,9 @@ static int fn_target(lua_State* L)
             }
           match:
             context->matched = true;
-            lua_pushcfunction(L, fn_action_callback);
+            lua_pushlightuserdata(L, context);
+            lua_pushvalue(L, globalsTableIdx);
+            lua_pushcclosure(L, fn_action_callback, 2);
             return 1;
         }
     }
@@ -137,7 +165,8 @@ static bool loadBuildLua(lua_State* L, Target* targetOrNull,
             }
 
             lua_pushvalue(L, -1);
-            lua_pushcclosure(L, fn_target, 1);
+            lua_pushvalue(L, globalsTableIdx);
+            lua_pushcclosure(L, fn_target, 2);
             lua_setfield(L, globalsTableIdx, "target");
 
             if (!Script_DoFile(L, file, dir, globalsTableIdx))
