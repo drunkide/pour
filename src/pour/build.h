@@ -6,6 +6,7 @@
 STRUCT(Target) {
     lua_State* L;
     const char* name;
+    const char* shortName;
     const char* platform;
     const char* compiler;
     const char* configuration;

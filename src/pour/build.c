@@ -53,13 +53,14 @@ static int fn_target(lua_State* L)
     if (context->nameCallback)
         context->nameCallback(L, name, context->nameCallbackData);
 
-    if (!context->targetOrNull || strcmp(context->targetOrNull->name, name) != 0)
-        lua_pushcfunction(L, fn_dummy_callback);
-    else {
+    if (context->targetOrNull &&
+            (!strcmp(context->targetOrNull->name, name) || !strcmp(context->targetOrNull->shortName, name))) {
         context->matched = true;
         lua_pushcfunction(L, fn_action_callback);
+        return 1;
     }
 
+    lua_pushcfunction(L, fn_dummy_callback);
     return 1;
 }
 
@@ -288,6 +289,13 @@ bool Pour_LoadTarget(lua_State* L, Target* target, const char* name)
 
     lua_pushstring(L, name);
     target->name = lua_tostring(L, -1);
+
+    if (!target->configuration)
+        target->shortName = target->name;
+    else {
+        lua_pushfstring(L, "%s:%s", target->platform, target->compiler);
+        target->shortName = lua_tostring(L, -1);
+    }
 
     /* setup defaults */
 
