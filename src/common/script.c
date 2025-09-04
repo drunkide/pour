@@ -156,21 +156,28 @@ bool Script_DoFile(lua_State* L, const char* name, const char* chdir, int global
 {
     int n = lua_gettop(L);
 
-    File_PushCurrentDirectory(L);
-    int curdir = lua_gettop(L);
-
     char path[DIR_MAX];
-    strcpy(path, name);
+    strcpy(path, name); /* FIXME: possible overflow */
     Dir_MakeAbsolutePath(L, path, sizeof(path));
     Dir_FromNativeSeparators(path);
     Dir_RemoveLastPath(path);
 
-    if (globalsTableIdx != 0)                   /* new _ENV */
-        lua_pushvalue(L, globalsTableIdx);
-    else
-        lua_newtable(L);
+    int status = report(L, luaL_loadfile(L, name)); /* FIXME: utf-8 */
+    if (status != LUA_OK) {
+        lua_settop(L, n);
+        return false;
+    }
 
-    int envIndex = lua_gettop(L);
+    int functionIdx = lua_gettop(L);
+
+    int envIndex;
+    if (globalsTableIdx != 0)                   /* new _ENV */
+        envIndex = globalsTableIdx;
+    else {
+        lua_newtable(L);
+        envIndex = lua_gettop(L);
+    }
+
     lua_pushvalue(L, -1);
     lua_setfield(L, envIndex, "_G");            /* _ENV._G = _ENV */
     lua_pushstring(L, path);
@@ -193,21 +200,30 @@ bool Script_DoFile(lua_State* L, const char* name, const char* chdir, int global
         lua_pop(L, 1);
     }
 
-    int status = report(L, luaL_loadfile(L, name)); /* FIXME: utf-8 */
-    if (status != LUA_OK) {
-        lua_settop(L, n);
-        return false;
-    }
+    lua_pushvalue(L, envIndex);                 /* new _ENV */
+    lua_setupvalue(L, functionIdx, 1);          /* set as upvalue #1 for the script */
+
+    bool result = Script_DoFunction(L, path, chdir, functionIdx);
+
+    lua_settop(L, n);
+    return result;
+}
+
+bool Script_DoFunction(lua_State* L, const char* scriptDir, const char* chdir, int functionIdx)
+{
+    int n = lua_gettop(L);
+
+    File_PushCurrentDirectory(L);
+    int curdir = lua_gettop(L);
 
     if (chdir)
         File_SetCurrentDirectory(L, chdir);
 
-    lua_pushvalue(L, envIndex);                 /* new _ENV */
-    lua_setupvalue(L, -2, 1);                   /* set as upvalue #1 for the script */
+    lua_pushvalue(L, functionIdx);
 
     const char* prevScriptDir = g_currentScriptDir;
-    g_currentScriptDir = path;
-    status = docall(L, 0, 0);
+    g_currentScriptDir = scriptDir;
+    int status = docall(L, 0, 0);
     g_currentScriptDir = prevScriptDir;
 
     report(L, status);

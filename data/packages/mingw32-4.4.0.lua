@@ -1,5 +1,5 @@
 
-if WINDOWS then
+if HOST_WINDOWS then
     SOURCE_URL = 'https://github.com/thirdpartystuff/win32-mingw440-32'
     TARGET_DIR = INSTALL_DIR..'/win32-mingw440-32'
     EXTRA_PATH = { TARGET_DIR..'/bin' }

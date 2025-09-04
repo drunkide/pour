@@ -1,6 +1,6 @@
 
 ----------------------------------------------------------------------------------------------------------------------
-if WINDOWS then
+if HOST_WINDOWS then
 
 function mingw32_440_generate(srcdir, bindir, buildtype)
     pour.require("ninja")
@@ -25,7 +25,7 @@ end
 
 end
 ----------------------------------------------------------------------------------------------------------------------
-if WINDOWS then
+if HOST_WINDOWS then
 
 function mingw32_810_generate(srcdir, bindir, buildtype)
     pour.require("ninja")
@@ -50,7 +50,7 @@ end
 
 end
 ----------------------------------------------------------------------------------------------------------------------
-if WINDOWS then
+if HOST_WINDOWS then
 
 function mingw64_810_generate(srcdir, bindir, buildtype)
     pour.require("ninja")
@@ -75,7 +75,7 @@ end
 
 end
 ----------------------------------------------------------------------------------------------------------------------
-if WINDOWS then
+if HOST_WINDOWS then
 
 function clang_350_linux64_generate(srcdir, bindir, buildtype, extra)
     local e = { table.unpack(extra or {}) }
@@ -104,7 +104,7 @@ end
 
 end
 ----------------------------------------------------------------------------------------------------------------------
-if WINDOWS then
+if HOST_WINDOWS then
 
 function clang_400_win32_generate(srcdir, bindir, buildtype, extra)
     local e = { table.unpack(extra or {}) }
@@ -132,7 +132,7 @@ end
 
 end
 ----------------------------------------------------------------------------------------------------------------------
-if WINDOWS then
+if HOST_WINDOWS then
 
 function msvc20_generate(srcdir, bindir, buildtype)
     pour.fetch("vm-windows-nt31")
@@ -157,7 +157,7 @@ end
 
 end
 ----------------------------------------------------------------------------------------------------------------------
-if WINDOWS then
+if HOST_WINDOWS then
 
 function msvc41_generate(srcdir, bindir, buildtype)
     pour.fetch("vm-windows95")
@@ -182,7 +182,7 @@ end
 
 end
 ----------------------------------------------------------------------------------------------------------------------
-if WINDOWS then
+if HOST_WINDOWS then
 
 function msvc2022_32_generate(srcdir, bindir, extra)
     local e = { table.unpack(extra or {}) }
@@ -207,7 +207,7 @@ end
 
 end
 ----------------------------------------------------------------------------------------------------------------------
-if WINDOWS then
+if HOST_WINDOWS then
 
 function msvc2022_64_generate(srcdir, bindir, extra)
     local e = { table.unpack(extra or {}) }
@@ -232,7 +232,7 @@ end
 
 end
 ----------------------------------------------------------------------------------------------------------------------
-if WINDOWS then
+if HOST_WINDOWS then
 
 function egcs_112_generate(srcdir, bindir, buildtype)
     pour.require("make")
@@ -258,7 +258,7 @@ end
 
 end
 ----------------------------------------------------------------------------------------------------------------------
-if WINDOWS then
+if HOST_WINDOWS then
 
 function borland_452_win32_generate(srcdir, bindir, buildtype, extra)
     local e = { table.unpack(extra or {}) }
@@ -286,7 +286,7 @@ end
 
 end
 ----------------------------------------------------------------------------------------------------------------------
-if WINDOWS then
+if HOST_WINDOWS then
 
 function watcom_10_win32_generate(srcdir, bindir, buildtype, extra)
     local e = { table.unpack(extra or {}) }

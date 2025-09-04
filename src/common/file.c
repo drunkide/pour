@@ -23,6 +23,7 @@
  #define WIN32_LEAN_AND_MEAN
  #include <windows.h>
  #include <winioctl.h>
+ #include <shellapi.h>
  #include <io.h>
  #ifndef __MINGW32__
   #define fileno _fileno
@@ -844,4 +845,28 @@ bool File_MaybeOverwrite(lua_State* L, const char* path, const void* newData, si
 
     File_Overwrite(L, path, newData, newSize);
     return true;
+}
+
+void File_ShellOpen(lua_State* L, const char* path)
+{
+  #ifdef _WIN32
+
+    size_t pathLen = strlen(path) + 1;
+    char* ptr = (char*)lua_newuserdatauv(L, pathLen, 0);
+    memcpy(ptr, path, pathLen);
+    Dir_ToNativeSeparators(ptr);
+
+    const WCHAR* wpath = (const WCHAR*)Utf8_PushConvertToUtf16(L, ptr, NULL);
+    bool result = (INT_PTR)ShellExecuteW(NULL, NULL, wpath, NULL, NULL, SW_SHOWNORMAL) > 32;
+
+    lua_pop(L, 2);
+
+    if (!result)
+        luaL_error(L, "unable to open file \"%s\".", path);
+
+  #else
+
+    luaL_error(gL, "File_ShellOpen: not implemented on this platform.");
+
+  #endif
 }

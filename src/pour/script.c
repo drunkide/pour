@@ -5,14 +5,28 @@
 
 char ARG;
 
+/********************************************************************************************************************/
+
+int Pour_PushNewGlobalsTable(lua_State* L)
+{
+    lua_newtable(L);
+
+    lua_pushstring(L, g_pourExecutable);
+    lua_setfield(L, -2, "POUR_EXECUTABLE");
+
+  #ifdef _WIN32
+    lua_pushboolean(L, 1);
+    lua_setglobal(L, "HOST_WINDOWS");
+  #endif
+
+    return lua_gettop(L);
+}
+
 bool Pour_ExecScript(lua_State* L, const char* script, const char* chdir, int argc, char** argv)
 {
     int n = lua_gettop(L);
 
-    lua_newtable(L);
-    lua_pushstring(L, g_pourExecutable);
-    lua_setfield(L, -2, "POUR_EXECUTABLE");
-    int globalsTableIdx = lua_gettop(L);
+    int globalsTableIdx = Pour_PushNewGlobalsTable(L);
 
     lua_createtable(L, argc, argc);
     for (int i = 1, idx = 1; i < argc; i++) {
@@ -65,12 +79,9 @@ void Pour_InvokeScript(lua_State* L, const char* script)
     if (!Dir_RemoveLastPath(dir))
         dir = NULL;
 
-    lua_newtable(L);
-    lua_pushstring(L, g_pourExecutable);
-    lua_setfield(L, -2, "POUR_EXECUTABLE");
+    int globalsTableIdx = Pour_PushNewGlobalsTable(L);
     lua_rawgetp(L, LUA_REGISTRYINDEX, &ARG);
     lua_setfield(L, -2, "arg");
-    int globalsTableIdx = lua_gettop(L);
 
     if (!Script_DoFile(L, script, dir, globalsTableIdx))
         luaL_error(L, "execution of script \"%s\" failed.", script);

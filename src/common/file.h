@@ -44,4 +44,6 @@ void File_Overwrite(lua_State* L, const char* path, const void* data, size_t siz
 void File_OverwriteSparse(lua_State* L, const char* path, const void* data, size_t size);
 bool File_MaybeOverwrite(lua_State* L, const char* path, const void* newData, size_t newSize);
 
+void File_ShellOpen(lua_State* L, const char* path);
+
 #endif

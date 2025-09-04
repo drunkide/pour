@@ -1,5 +1,5 @@
 
-if WINDOWS then
+if HOST_WINDOWS then
     SOURCE_URL = 'https://github.com/thirdpartystuff/win32-ninja'
     TARGET_DIR = INSTALL_DIR..'/win32-ninja'
     EXTRA_PATH = { TARGET_DIR }

@@ -1,5 +1,5 @@
 
-if WINDOWS then
+if HOST_WINDOWS then
     SOURCE_URL = 'https://github.com/thirdpartystuff/win32-borland452'
     TARGET_DIR = INSTALL_DIR..'/win32-borland452'
     EXTRA_DEPS = { 'gnu' }

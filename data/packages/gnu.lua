@@ -1,5 +1,5 @@
 
-if WINDOWS then
+if HOST_WINDOWS then
     SOURCE_URL = 'https://github.com/thirdpartystuff/win32-gnu'
     TARGET_DIR = INSTALL_DIR..'/win32-gnu'
     EXTRA_PATH = { TARGET_DIR }

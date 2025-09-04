@@ -15,6 +15,7 @@ extern const char* const g_rootDir;
 extern const char* const g_installDir;
 extern const char* const g_dataDir;
 extern const char* const g_packagesDir;
+extern const char* const g_targetsDir;
 
 char* Dir_FindLastSeparator(const char* ptr);
 

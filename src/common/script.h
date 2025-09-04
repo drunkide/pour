@@ -11,6 +11,7 @@ const char* Script_GetCurrentScriptDir(lua_State* L);
 
 void Script_Interrupt(void);
 bool Script_DoFile(lua_State* L, const char* name, const char* chdir, int globalsTableIdx);
+bool Script_DoFunction(lua_State* L, const char* scriptDir, const char* chdir, int functionIdx);
 
 int Script_RunVM(int argc, char** argv, PFNMainProc pfnMain);
 

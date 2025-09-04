@@ -76,6 +76,8 @@ set(src
     mkdisk/write.h
     patch/patch.c
     patch/patch.h
+    pour/build.c
+    pour/build.h
     pour/install.c
     pour/install.h
     pour/package.c

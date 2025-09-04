@@ -1,5 +1,6 @@
 #include <pour/package.h>
 #include <pour/install.h>
+#include <pour/script.h>
 #include <common/console.h>
 #include <common/env.h>
 #include <common/dirs.h>
@@ -16,10 +17,8 @@ char PACKAGE_DIR;
 static void getGlobal(Package* pkg, const char* name)
 {
     lua_State* L = pkg->L;
-    lua_pushvalue(L, pkg->globalsTable);
     lua_pushstring(L, name);
-    lua_rawget(L, -2);
-    lua_remove(L, -2);
+    lua_rawget(L, pkg->globalsTable);
 }
 
 static bool getBoolean(Package* pkg, const char* name)
@@ -293,13 +292,8 @@ bool Pour_EnsurePackageInstalled(Package* pkg)
 
 void Pour_InitPackage(lua_State* L, Package* pkg, const char* name)
 {
-    pkg->L = L;
     luaL_checkstack(L, 100, NULL);
-
+    pkg->L = L;
     pkg->name = name;
-
-    lua_newtable(L);
-    lua_pushstring(L, g_pourExecutable);
-    lua_setfield(L, -2, "POUR_EXECUTABLE");
-    pkg->globalsTable = lua_gettop(L);
+    pkg->globalsTable = Pour_PushNewGlobalsTable(L);
 }

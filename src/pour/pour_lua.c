@@ -3,16 +3,22 @@
 #include <pour/install.h>
 #include <pour/run.h>
 #include <pour/script.h>
+#include <pour/build.h>
 #include <common/script.h>
 #include <common/dirs.h>
 #include <common/file.h>
 #include <common/utf8.h>
+#include <string.h>
 
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#include <shellapi.h>
-#endif
+static int pour_build(lua_State* L)
+{
+    const char* target = luaL_checkstring(L, 1);
+
+    if (!Pour_Build(L, target, BUILD_NORMAL))
+        return luaL_error(L, "build failed.");
+
+    return 0;
+}
 
 static int pour_chdir(lua_State* L)
 {
@@ -54,6 +60,36 @@ static int pour_fetch(lua_State* L)
     const char* package = luaL_checkstring(L, 1);
     if (!Pour_Install(L, package, true))
         return luaL_error(L, "could not fetch required package '%s'.", package);
+    return 0;
+}
+
+static int pour_force_generate(lua_State* L)
+{
+    const char* target = luaL_checkstring(L, 1);
+
+    if (!Pour_Build(L, target, BUILD_GENERATE_ONLY_FORCE))
+        return luaL_error(L, "generate failed.");
+
+    return 0;
+}
+
+static int pour_generate(lua_State* L)
+{
+    const char* target = luaL_checkstring(L, 1);
+
+    if (!Pour_Build(L, target, BUILD_GENERATE_ONLY))
+        return luaL_error(L, "generate failed.");
+
+    return 0;
+}
+
+static int pour_open_in_ide(lua_State* L)
+{
+    const char* target = luaL_checkstring(L, 1);
+
+    if (!Pour_Build(L, target, BUILD_GENERATE_AND_OPEN))
+        return luaL_error(L, "generate failed.");
+
     return 0;
 }
 
@@ -118,40 +154,23 @@ static int pour_invoke(lua_State* L)
 
 static int pour_shell_open(lua_State* L)
 {
-    size_t fileLen;
-    const char* file = luaL_checklstring(L, 1, &fileLen);
-
-  #ifdef _WIN32
-
-    ++fileLen;
-    char* ptr = (char*)lua_newuserdatauv(L, fileLen, 0);
-    memcpy(ptr, file, fileLen);
-    Dir_ToNativeSeparators(ptr);
-
-    const WCHAR* wfile = (const WCHAR*)Utf8_PushConvertToUtf16(L, ptr, NULL);
-    bool result = (INT_PTR)ShellExecuteW(NULL, NULL, wfile, NULL, NULL, SW_SHOWNORMAL) > 32;
-    lua_pop(L, 1);
-
-    if (!result)
-        luaL_error(L, "unable to open file \"%s\".", file);
-
-  #else
-
-    luaL_error(gL, "shell_open: not implemented on this platform.");
-
-  #endif
-
+    const char* file = luaL_checkstring(L, 1);
+    File_ShellOpen(L, file);
     return 0;
 }
 
 /********************************************************************************************************************/
 
 static const luaL_Reg funcs[] = {
+    { "build", pour_build },
     { "chdir", pour_chdir },
     { "file_exists", pour_file_exists },
     { "file_read", pour_file_read },
     { "file_write", pour_file_write },
     { "fetch", pour_fetch },
+    { "force_generate", pour_force_generate },
+    { "generate", pour_generate },
+    { "open_in_ide", pour_open_in_ide },
     { "require", pour_require },
     { "run", pour_run },
     { "invoke", pour_invoke },

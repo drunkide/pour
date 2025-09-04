@@ -14,11 +14,13 @@ static char g_rootDir_[DIR_MAX];
 static char g_installDir_[DIR_MAX];
 static char g_dataDir_[DIR_MAX];
 static char g_packagesDir_[DIR_MAX];
+static char g_targetsDir_[DIR_MAX];
 
 const char* const g_rootDir = g_rootDir_;
 const char* const g_installDir = g_installDir_;
 const char* const g_dataDir = g_dataDir_;
 const char* const g_packagesDir = g_packagesDir_;
+const char* const g_targetsDir = g_targetsDir_;
 
 char* Dir_FindLastSeparator(const char* ptr)
 {
@@ -205,4 +207,7 @@ void Dirs_Init(lua_State* L)
 
     strcpy(g_packagesDir_, g_dataDir_);
     Dir_AppendPath(g_packagesDir_, "packages");
+
+    strcpy(g_targetsDir_, g_dataDir_);
+    Dir_AppendPath(g_targetsDir_, "targets");
 }
