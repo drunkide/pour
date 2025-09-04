@@ -1,4 +1,5 @@
 #include <pour/build.h>
+#include <pour/run.h>
 #include <pour/install.h>
 #include <pour/script.h>
 #include <common/console.h>
@@ -327,6 +328,11 @@ bool Pour_LoadTarget(lua_State* L, Target* target, const char* sourceDir, const 
     lua_newtable(L);
     lua_setfield(L, target->globalsTableIdx, "CMAKE_BUILD_PARAMS");
 
+    lua_createtable(L, 1, 0);
+    lua_pushstring(L, g_cmakeModulesDir);
+    lua_rawseti(L, -2, 1);
+    lua_setfield(L, target->globalsTableIdx, "CMAKE_MODULE_PATH");
+
     /* load target lua */
 
     if (!Script_DoFile(L, target->luaScript, NULL, target->globalsTableIdx))
@@ -417,20 +423,45 @@ bool Pour_LoadTarget(lua_State* L, Target* target, const char* sourceDir, const 
 
 /********************************************************************************************************************/
 
-bool Pour_GenerateTarget(Target* target, genmode_t mode)
+static int cmake_generate(lua_State* L)
 {
-    lua_State* L = target->L;
+    Target* target = (Target*)lua_touserdata(L, lua_upvalueindex(1));
+    genmode_t mode = (genmode_t)lua_tointeger(L, lua_upvalueindex(2));
+    int argc = lua_gettop(L);
+
+    const char* cmakeVersion = luaL_checkstring(L, 1);
+    const char* cmake = lua_pushfstring(L, "cmake-%s", cmakeVersion);
+
+    char** argv = (char**)lua_newuserdatauv(L, argc * sizeof(char**), 0);
+    argv[0] = (char*)cmake;
+
+    size_t len = strlen(argv[0]) + 1;
+    for (int i = 1; i < argc; i++) {
+        size_t argLen;
+        char* arg = (char*)luaL_checklstring(L, i + 1, &argLen);
+        argv[i] = arg;
+        len += argLen + 1;
+    }
+
+    char* buffer = (char*)lua_newuserdatauv(L, len, 0);
+    char* p = buffer;
+    for (int i = 0; i < argc; i++) {
+        size_t len = strlen(argv[i]) + 1;
+        memcpy(p, argv[i], len);
+        argv[i] = p;
+        p += len;
+    }
 
     const char* generated = lua_pushfstring(L, "%s/%s", target->buildDir, ".pour-generated");
     if (mode == GEN_NORMAL) {
         if (File_Exists(L, generated)) {
-            const char* data = File_PushContents(L, generated, NULL);
-            bool wasVerbose = (*data == 'v');
-            if ((g_verbose && wasVerbose) || (!g_verbose && !wasVerbose))
-                return true;
+            size_t dataLen;
+            const char* data = File_PushContents(L, generated, &dataLen);
+            if (dataLen == len && !memcmp(data, buffer, len))
+                return 0;
         }
 
-        /* if generation failed previously, force full rebuild */
+        /* if generation failed previously or options changed, force full rebuild */
         mode = GEN_FORCE_REBUILD;
     }
 
@@ -439,6 +470,24 @@ bool Pour_GenerateTarget(Target* target, genmode_t mode)
         if (File_Exists(L, CMakeCache_txt))
             File_TryDelete(L, CMakeCache_txt);
     }
+
+    if (!Pour_Run(L, cmake, NULL, argc, argv, RUN_WAIT)) {
+        File_TryDelete(L, generated);
+        return luaL_error(L, "command execution failed.");
+    }
+
+    File_MaybeOverwrite(L, generated, buffer, len);
+    return 0;
+}
+
+bool Pour_GenerateTarget(Target* target, genmode_t mode)
+{
+    lua_State* L = target->L;
+
+    lua_pushlightuserdata(L, target);
+    lua_pushinteger(L, mode);
+    lua_pushcclosure(L, cmake_generate, 2);
+    lua_setfield(L, target->globalsTableIdx, "cmake_generate");
 
     if (!File_Exists(L, target->buildDir))
         File_TryCreateDirectory(L, target->buildDir);
@@ -450,7 +499,6 @@ bool Pour_GenerateTarget(Target* target, genmode_t mode)
     if (!Script_DoFunction(L, target->luaScriptDir, target->buildDir, target->generateFn))
         return false;
 
-    File_MaybeOverwrite(L, generated, (g_verbose ? "v" : "."), 1);
     return true;
 }
 

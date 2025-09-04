@@ -14,7 +14,7 @@ end
 function CMAKE(params)
     local e = {}
     table_append(e, '--no-warn-unused-cli')
-    table_append(e, '-DCMAKE_MODULE_PATH='..CMAKE_DIR)
+    table_append(e, '-DCMAKE_MODULE_PATH='..table.concat(CMAKE_MODULE_PATH, ';'))
     if CMAKE_GENERATOR ~= '' then
         table_append(e, { '-G', CMAKE_GENERATOR })
         if HOST_WINDOWS then
@@ -36,7 +36,7 @@ function CMAKE(params)
         table_append(e, '-DCMAKE_BUILD_TYPE='..CMAKE_CONFIGURATION)
     end
     table_append(e, SOURCE_DIR)
-    pour.run('cmake-'..CMAKE_VERSION, table.unpack(e))
+    cmake_generate(CMAKE_VERSION, table.unpack(e))
 end
 
 function CMAKE_BUILD(params)
