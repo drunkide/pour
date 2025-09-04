@@ -1,0 +1,7 @@
+
+if(WIN32)
+    set(CMAKE_EXECUTABLE_SUFFIX ".exe")
+endif()
+
+set_property(GLOBAL PROPERTY USE_FOLDERS TRUE)
+set_property(GLOBAL PROPERTY PREDEFINED_TARGETS_FOLDER "CMake")

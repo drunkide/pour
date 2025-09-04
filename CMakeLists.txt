@@ -1,12 +1,8 @@
 cmake_minimum_required(VERSION 3.5...3.31)
 project(pour)
 
-if(WIN32)
-    set(CMAKE_EXECUTABLE_SUFFIX ".exe")
-endif()
-
-set_property(GLOBAL PROPERTY USE_FOLDERS TRUE)
-set_property(GLOBAL PROPERTY PREDEFINED_TARGETS_FOLDER "CMake")
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/data/cmake")
+include(DrunkFly/Common)
 
 if(USE_POSIX_IO)
     add_definitions(-DUSE_POSIX_IO)

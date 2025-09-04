@@ -13,6 +13,8 @@ end
 
 function CMAKE(params)
     local e = {}
+    table_append(e, '--no-warn-unused-cli')
+    table_append(e, '-DCMAKE_MODULE_PATH='..CMAKE_DIR)
     if CMAKE_GENERATOR ~= '' then
         table_append(e, { '-G', CMAKE_GENERATOR })
         if HOST_WINDOWS then

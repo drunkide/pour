@@ -310,6 +310,7 @@ static int pmain(lua_State *L)
     lua_pushstring(L, g_rootDir); lua_setglobal(L, "ROOT_DIR");
     lua_pushstring(L, g_installDir); lua_setglobal(L, "INSTALL_DIR");
     lua_pushstring(L, g_dataDir); lua_setglobal(L, "DATA_DIR");
+    lua_pushstring(L, g_cmakeDir); lua_setglobal(L, "CMAKE_DIR");
     lua_pushstring(L, g_packagesDir); lua_setglobal(L, "PACKAGES_DIR");
     lua_pushstring(L, g_targetsDir); lua_setglobal(L, "TARGETS_DIR");
 
