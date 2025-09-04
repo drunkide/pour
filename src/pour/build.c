@@ -53,11 +53,23 @@ static int fn_target(lua_State* L)
     if (context->nameCallback)
         context->nameCallback(L, name, context->nameCallbackData);
 
-    if (context->targetOrNull &&
-            (!strcmp(context->targetOrNull->name, name) || !strcmp(context->targetOrNull->shortName, name))) {
-        context->matched = true;
-        lua_pushcfunction(L, fn_action_callback);
-        return 1;
+    if (context->targetOrNull) {
+        Target* target = context->targetOrNull;
+
+        if (!strcmp(target->shortName, name))
+            goto match;
+
+        if (!strcmp(target->name, name)) {
+            if (target->isMulticonfig) {
+                luaL_error(L, "full target name (\"%s\") should not be used for multiconfig generators "
+                    "like Visual Studio and Xcode. Use short target name (\"%s\") instead.",
+                    target->name, target->shortName);
+            }
+          match:
+            context->matched = true;
+            lua_pushcfunction(L, fn_action_callback);
+            return 1;
+        }
     }
 
     lua_pushcfunction(L, fn_dummy_callback);
@@ -214,10 +226,14 @@ static void setGlobals(Target* target)
     lua_pushstring(L, target->configuration);
     lua_setfield(L, target->globalsTableIdx, "TARGET_CONFIGURATION");
 
-    char upper = toupper(*target->configuration);
-    lua_pushlstring(L, &upper, 1);
-    lua_pushstring(L, target->configuration + 1);
-    lua_concat(L, 2);
+    if (!target->configuration)
+        lua_pushnil(L);
+    else {
+        char upper = toupper(*target->configuration);
+        lua_pushlstring(L, &upper, 1);
+        lua_pushstring(L, target->configuration + 1);
+        lua_concat(L, 2);
+    }
     lua_setfield(L, target->globalsTableIdx, "CMAKE_CONFIGURATION");
 
     lua_pushstring(L, target->cmakeGenerator);
@@ -350,7 +366,7 @@ bool Pour_LoadTarget(lua_State* L, Target* target, const char* name)
         target->isMulticonfig = false;
     } else if (!strcmp(target->cmakeGenerator, "Xcode")) {
         target->isMulticonfig = true;
-    } else if (!strcmp(target->cmakeGenerator, "Microsoft Visual Studio 17 2022")) {
+    } else if (!strcmp(target->cmakeGenerator, "Visual Studio 17 2022")) {
         target->isMulticonfig = true;
     } else {
         Con_PrintF(L, COLOR_ERROR, "ERROR: unsupported CMake generator \"%s\".\n", target->cmakeGenerator);
@@ -380,7 +396,13 @@ bool Pour_LoadTarget(lua_State* L, Target* target, const char* name)
 
     setGlobals(target);
     if (!loadBuildLua(L, target, NULL, NULL)) {
-        Con_PrintF(L, COLOR_ERROR, "ERROR: target \"%s\" was not found in Build.lua.\n", target->name);
+        if (!strcmp(target->name, target->shortName)) {
+            Con_PrintF(L, COLOR_ERROR, "ERROR: \"%s\" was not found in Build.lua.\n",
+                target->name, target->shortName);
+        } else {
+            Con_PrintF(L, COLOR_ERROR, "ERROR: neither \"%s\" nor \"%s\" was found in Build.lua.\n",
+                target->name, target->shortName);
+        }
         return false;
     }
 
@@ -452,6 +474,7 @@ bool Pour_BuildTarget(Target* target, bool cleanFirst)
 bool Pour_Build(lua_State* L, const char* targetName, buildmode_t mode)
 {
     int n = lua_gettop(L);
+    luaL_checkstack(L, 1000, NULL);
 
     Target target;
     if (!Pour_LoadTarget(L, &target, targetName)) {
@@ -509,10 +532,11 @@ bool Pour_Build(lua_State* L, const char* targetName, buildmode_t mode)
                 return false;
             }
 
+            lua_pushstring(L, target.buildDir);
+            lua_pushliteral(L, "/");
             lua_pushlstring(L, p, (size_t)(end - p));
-
             lua_pushliteral(L, ".sln");
-            lua_concat(L, 2);
+            lua_concat(L, 4);
             const char* slnFile = lua_tostring(L, -1);
             if (File_Exists(L, slnFile)) {
                 File_ShellOpen(L, slnFile);
