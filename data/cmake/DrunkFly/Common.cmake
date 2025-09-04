@@ -5,14 +5,6 @@ set_property(GLOBAL PROPERTY PREDEFINED_TARGETS_FOLDER "CMake")
 include(CheckCCompilerFlag)
 include(CheckCXXCompilerFlag)
 
-######################################################################################################################
-
-if(CMAKE_C_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    set(CLANG TRUE)
-elseif(CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX)
-    set(GCC TRUE)
-endif()
-
 if(WIN32)
     # This sometimes breaks on toolchains
     set(CMAKE_EXECUTABLE_SUFFIX ".exe")
@@ -20,7 +12,41 @@ if(WIN32)
 endif()
 
 ######################################################################################################################
-# Adjust flags for old compilers we support
+# Some useful global variables
+
+if(CMAKE_SYSTEM_NAME MATCHES "Linux")
+    set(LINUX TRUE)
+endif()
+
+if(CMAKE_C_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    set(CLANG TRUE)
+elseif(CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX)
+    set(GCC TRUE)
+endif()
+
+if(CMAKE_SIZEOF_VOID_P EQUAL 4)
+    set(CPU32 TRUE)
+    set(CPU64 FALSE)
+else()
+    set(CPU32 FALSE)
+    set(CPU64 TRUE)
+endif()
+
+######################################################################################################################
+# Adjust flags for compilers we support
+
+if(MSVC)
+    # Force string pooling
+    if(NOT OLD_MSVC)
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /GF")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /GF")
+    endif()
+
+    # Disable noisy warnings
+    add_definitions(
+        /D_CRT_SECURE_NO_WARNINGS=1
+        )
+endif()
 
 if(OLD_MSVC)
     string(REPLACE "/GZ" "" CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG}")
@@ -28,6 +54,7 @@ if(OLD_MSVC)
         string(REGEX REPLACE "/Zm[0-9]*" "" CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
         string(REGEX REPLACE "/MDd" "/MD" CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG}")
         string(REPLACE "X86" "IX86" CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS}")
+        string(REPLACE "X86" "IX86" CMAKE_STATIC_LINKER_FLAGS "${CMAKE_STATIC_LINKER_FLAGS}")
         string(REPLACE "X86" "IX86" CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS}")
     endif()
     string(REPLACE "/pdbtype:sept" "" CMAKE_EXE_LINKER_FLAGS_RELWITHDEBINFO "${CMAKE_EXE_LINKER_FLAGS_RELWITHDEBINFO}")
@@ -36,11 +63,15 @@ if(OLD_MSVC)
     string(REPLACE "/pdbtype:sept" "" CMAKE_SHARED_LINKER_FLAGS_DEBUG "${CMAKE_SHARED_LINKER_FLAGS_DEBUG}")
 endif()
 
+if(GCC OR CLANG)
+    add_compile_options(-fno-ident)
+endif()
+
 ######################################################################################################################
 # Macros for compiler options
 
 macro(_choose_visibility _func)
-    set(_vis)
+    set(_vis "PRIVATE")
     if(opt_PUBLIC OR opt_PRIVATE OR opt_INTERFACE)
         if(NOT opt_TARGET)
             message(FATAL_ERROR "${_func}: PUBLIC/PRIVATE/INTERFACE can only be specified with TARGET.")
@@ -196,7 +227,7 @@ function(enable_maximum_warnings)
         set(_prefix TARGET ${opt_TARGET})
     endif()
 
-    if(MSVC)
+    if(MSVC AND NOT OLD_MSVC)
         # avoid stupid warning "/W3 was overriden by /W4"
         string(REPLACE "/W3" "" CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
         string(REPLACE "/W3" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
@@ -205,8 +236,6 @@ function(enable_maximum_warnings)
     endif()
 
     extra_compile_options(${_prefix}
-        MSVC
-            /W4
         WATCOM
             -w4
         BORLAND
@@ -223,9 +252,12 @@ function(enable_maximum_warnings)
 
     if(MSVC AND NOT OLD_MSVC)
         extra_compile_options(${_prefix}
+            /W4
             /Wall
+            /wd4324     # structure was padded due to alignment
             /wd4710     # function not inlined
             /wd4711     # function selected for automatic inline expansion
+            /wd4738     # storing 32-bit float result in memory, possible loss of performance
             /wd4820     # padding added after data member
             /wd5045     # compiler will insert Spectre mitigation for memory load if /Qspectre switch specified
             )
