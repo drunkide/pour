@@ -10,7 +10,7 @@ if not exist build mkdir build
 if not exist build\mingw32_minsizerel mkdir build\mingw32_minsizerel
 cd build\mingw32_minsizerel || exit /B 1
 
-if exist pour.exe goto skip_cmake
+if exist pour_wrapper_windows.exe goto skip_cmake
 
 call "%~dp0tools\cmake-3.5.2.cmd" ^
     -G "MinGW Makefiles" ^
