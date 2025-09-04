@@ -217,6 +217,9 @@ static void setGlobals(Target* target)
 
     lua_pushboolean(L, target->isMulticonfig);
     lua_setfield(L, target->globalsTableIdx, "CMAKE_IS_MULTICONFIG");
+
+    lua_pushboolean(L, g_verbose);
+    lua_setfield(L, target->globalsTableIdx, "VERBOSE");
 }
 
 bool Pour_LoadTarget(lua_State* L, Target* target, const char* name)
@@ -381,10 +384,14 @@ bool Pour_GenerateTarget(Target* target, genmode_t mode)
 {
     lua_State* L = target->L;
 
-    const char* generated = lua_pushfstring(L, "%s/%s", target->buildDir, ".generated");
+    const char* generated = lua_pushfstring(L, "%s/%s", target->buildDir, ".pour-generated");
     if (mode == GEN_NORMAL) {
-        if (File_Exists(L, generated))
-            return true;
+        if (File_Exists(L, generated)) {
+            const char* data = File_PushContents(L, generated, NULL);
+            bool wasVerbose = (*data == 'v');
+            if ((g_verbose && wasVerbose) || (!g_verbose && !wasVerbose))
+                return true;
+        }
 
         /* if generation failed previously, force full rebuild */
         mode = GEN_FORCE_REBUILD;
@@ -406,13 +413,11 @@ bool Pour_GenerateTarget(Target* target, genmode_t mode)
     if (!Script_DoFunction(L, target->luaScriptDir, target->buildDir, target->generateFn))
         return false;
 
-    if (!File_Exists(L, generated))
-        File_Overwrite(L, generated, "", 0);
-
+    File_MaybeOverwrite(L, generated, (g_verbose ? "v" : "."), 1);
     return true;
 }
 
-bool Pour_BuildTarget(Target* target)
+bool Pour_BuildTarget(Target* target, bool cleanFirst)
 {
     lua_State* L = target->L;
 
@@ -420,6 +425,10 @@ bool Pour_BuildTarget(Target* target)
         return false;
 
     setGlobals(target);
+
+    lua_pushboolean(L, cleanFirst);
+    lua_setfield(L, target->globalsTableIdx, "CMAKE_FORCE_REBUILD");
+
     return Script_DoFunction(L, target->luaScriptDir, target->buildDir, target->buildFn);
 }
 
@@ -438,7 +447,7 @@ bool Pour_Build(lua_State* L, const char* targetName, buildmode_t mode)
     genmode_t genmode = GEN_NORMAL;
     if (mode == BUILD_GENERATE_ONLY)
         genmode = GEN_FORCE;
-    else if (mode == BUILD_GENERATE_ONLY_FORCE)
+    else if (mode == BUILD_GENERATE_ONLY_FORCE || mode == BUILD_REBUILD)
         genmode = GEN_FORCE_REBUILD;
 
     if (!Pour_GenerateTarget(&target, genmode)) {
@@ -452,7 +461,8 @@ bool Pour_Build(lua_State* L, const char* targetName, buildmode_t mode)
             break;
 
         case BUILD_NORMAL:
-            if (!Pour_BuildTarget(&target)) {
+        case BUILD_REBUILD:
+            if (!Pour_BuildTarget(&target, mode == BUILD_REBUILD)) {
                 lua_settop(L, n);
                 return false;
             }

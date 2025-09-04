@@ -30,6 +30,7 @@ typedef enum genmode_t {
 
 typedef enum buildmode_t {
     BUILD_NORMAL,
+    BUILD_REBUILD,
     BUILD_GENERATE_ONLY,
     BUILD_GENERATE_ONLY_FORCE,
     BUILD_GENERATE_AND_OPEN,
@@ -41,7 +42,7 @@ void Pour_LoadBuildLua(lua_State* L, PFNNAMECALLBACK callback, void* callbackDat
 
 bool Pour_LoadTarget(lua_State* L, Target* target, const char* name);
 bool Pour_GenerateTarget(Target* target, genmode_t mode);
-bool Pour_BuildTarget(Target* target);
+bool Pour_BuildTarget(Target* target, bool cleanFirst);
 
 bool Pour_Build(lua_State* L, const char* targetName, buildmode_t mode);
 

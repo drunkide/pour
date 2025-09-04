@@ -1,7 +1,11 @@
 
 function table_append(dst, src)
-    for _, v in ipairs(src) do
-        table.insert(dst, v)
+    if type(src) ~= 'table' then
+        table.insert(dst, tostring(src))
+    else
+        for _, v in ipairs(src) do
+            table.insert(dst, tostring(v))
+        end
     end
 end
 
@@ -16,15 +20,24 @@ function CMAKE(params)
     if params then
         table_append(e, params)
     end
-    if not CMAKE_IS_MULTICONFIG then
-        table.insert(e, '-DCMAKE_BUILD_TYPE='..TARGET_CONFIGURATION)
+    if VERBOSE then
+        table_append(e, '-DCMAKE_VERBOSE_MAKEFILE=ON')
     end
-    table.insert(e, SOURCE_DIR)
+    if not CMAKE_IS_MULTICONFIG then
+        table_append(e, '-DCMAKE_BUILD_TYPE='..TARGET_CONFIGURATION)
+    end
+    table_append(e, SOURCE_DIR)
     pour.run('cmake-'..CMAKE_VERSION, table.unpack(e))
 end
 
 function CMAKE_BUILD(params)
     local e = {}
+    if CMAKE_FORCE_REBUILD then
+        table_append(e, '--clean-first')
+    end
+    if VERBOSE and CMAKE_VERSION ~= '3.5.2' then
+        table_append(e, '--verbose')
+    end
     if CMAKE_IS_MULTICONFIG then
         table_append(e, { '--config', TARGET_CONFIGURATION })
     end
