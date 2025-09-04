@@ -545,6 +545,8 @@
 # endif
 #endif
 
+#if !defined(__WATCOMC__) || __WATCOMC__ >= 1100
+
 #if !defined (LONG_LONG_MAX) && defined (INT64_C)
 # define LONG_LONG_MAX INT64_C (9223372036854775807)
 #endif
@@ -560,6 +562,8 @@
 #endif
 #if !defined (UINT64_MAX) && defined (INT64_C)
 # define UINT64_MAX UINT64_C (18446744073709551615)
+#endif
+
 #endif
 
 /*
@@ -719,7 +723,7 @@ typedef uint_least32_t uint_fast32_t;
  *  type limits.
  */
 
-#if defined(__WATCOMC__) || defined(_MSC_VER) || defined (__GNUC__) && !defined(vxWorks)
+#if (defined(__WATCOMC__) && __WATCOMC__ >= 1100) || defined(_MSC_VER) || defined (__GNUC__) && !defined(vxWorks)
 # include <wchar.h>
 # ifndef WCHAR_MIN
 #  define WCHAR_MIN 0
@@ -813,15 +817,18 @@ typedef uint_least32_t uint_fast32_t;
 #include <stdio.h>
 #include <string.h>
 
+#define glue2_aux(x,y) x ## y
+#define glue2(x,y) glue2_aux(x,y)
+
 #define glue3_aux(x,y,z) x ## y ## z
 #define glue3(x,y,z) glue3_aux(x,y,z)
 
-#define DECLU(bits) glue3(uint,bits,_t) glue3(u,bits,) = glue3(UINT,bits,_C) (0);
-#define DECLI(bits) glue3(int,bits,_t) glue3(i,bits,) = glue3(INT,bits,_C) (0);
+#define DECLU(bits) glue3(uint,bits,_t) glue2(u,bits) = glue3(UINT,bits,_C) (0);
+#define DECLI(bits) glue3(int,bits,_t) glue2(i,bits) = glue3(INT,bits,_C) (0);
 
-#define DECL(us,bits) glue3(DECL,us,) (bits)
+#define DECL(us,bits) glue2(DECL,us) (bits)
 
-#define TESTUMAX(bits) glue3(u,bits,) = ~glue3(u,bits,); if (glue3(UINT,bits,_MAX) != glue3(u,bits,)) printf ("Something wrong with UINT%d_MAX\n", bits)
+#define TESTUMAX(bits) glue2(u,bits) = ~glue2(u,bits); if (glue3(UINT,bits,_MAX) != glue2(u,bits)) printf ("Something wrong with UINT%d_MAX\n", bits)
 
 #define REPORTERROR(msg) { err_n++; if (err_first <= 0) err_first = __LINE__; printf msg; }
 

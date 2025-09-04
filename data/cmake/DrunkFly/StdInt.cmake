@@ -1,0 +1,22 @@
+
+include(CheckIncludeFile)
+include(CheckTypeSize)
+
+check_include_file("stdint.h" HAVE_STDINT_H)
+if(NOT HAVE_STDINT_H)
+    if(MSVC)
+        include_directories("${CMAKE_CURRENT_LIST_DIR}/stdint/pstdint")
+    else()
+        check_include_file("sys/types.h" HAVE_SYS_TYPES_H)
+        if(HAVE_SYS_TYPES_H)
+            check_type_size("int8_t" INT8_T) # make sure there is `int8_t` in <sys/types.h>
+            if(HAVE_INT8_T)
+                include_directories("${CMAKE_CURRENT_LIST_DIR}/stdint/sys_types")
+            else()
+                include_directories("${CMAKE_CURRENT_LIST_DIR}/stdint/pstdint")
+            endif()
+        else()
+            include_directories("${CMAKE_CURRENT_LIST_DIR}/stdint/pstdint")
+        endif()
+    endif()
+endif()
