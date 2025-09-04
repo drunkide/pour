@@ -53,56 +53,6 @@ end
 ----------------------------------------------------------------------------------------------------------------------
 if HOST_WINDOWS then
 
-function mingw32_810_generate(srcdir, bindir, buildtype)
-    pour.require("ninja")
-    pour.require("mingw32-8.1.0")
-    pour.chdir(bindir)
-    pour.run('cmake-3.5.2',
-            '-G', 'Ninja',
-            '-DCMAKE_BUILD_TYPE='..buildtype,
-            srcdir
-        )
-end
-
-function mingw32_810(srcdir, bindir, buildtype, exe)
-    pour.require("ninja")
-    pour.require("mingw32-8.1.0")
-    pour.chdir(bindir)
-    if not pour.file_exists(exe) then
-        mingw32_810_generate(srcdir, bindir, buildtype)
-    end
-    pour.run('cmake-3.5.2', '--build', '.')
-end
-
-end
-----------------------------------------------------------------------------------------------------------------------
-if HOST_WINDOWS then
-
-function mingw64_810_generate(srcdir, bindir, buildtype)
-    pour.require("ninja")
-    pour.require("mingw64-8.1.0")
-    pour.chdir(bindir)
-    pour.run('cmake-3.5.2',
-            '-G', 'Ninja',
-            '-DCMAKE_BUILD_TYPE='..buildtype,
-            srcdir
-        )
-end
-
-function mingw64_810(srcdir, bindir, buildtype, exe)
-    pour.require("ninja")
-    pour.require("mingw64-8.1.0")
-    pour.chdir(bindir)
-    if not pour.file_exists(exe) then
-        mingw64_810_generate(srcdir, bindir, buildtype)
-    end
-    pour.run('cmake-3.5.2', '--build', '.')
-end
-
-end
-----------------------------------------------------------------------------------------------------------------------
-if HOST_WINDOWS then
-
 function clang_350_linux64_generate(srcdir, bindir, buildtype, extra)
     local e = { table.unpack(extra or {}) }
     e[#e + 1] = srcdir
