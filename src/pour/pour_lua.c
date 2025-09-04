@@ -13,8 +13,9 @@
 static int pour_build(lua_State* L)
 {
     const char* target = luaL_checkstring(L, 1);
+    const char* buildDir = luaL_optstring(L, 2, NULL);
 
-    if (!Pour_Build(L, target, BUILD_NORMAL))
+    if (!Pour_Build(L, buildDir, target, BUILD_NORMAL))
         return luaL_error(L, "build failed.");
 
     return 0;
@@ -66,8 +67,9 @@ static int pour_fetch(lua_State* L)
 static int pour_force_generate(lua_State* L)
 {
     const char* target = luaL_checkstring(L, 1);
+    const char* buildDir = luaL_optstring(L, 2, NULL);
 
-    if (!Pour_Build(L, target, BUILD_GENERATE_ONLY_FORCE))
+    if (!Pour_Build(L, buildDir, target, BUILD_GENERATE_ONLY_FORCE))
         return luaL_error(L, "generate failed.");
 
     return 0;
@@ -76,8 +78,9 @@ static int pour_force_generate(lua_State* L)
 static int pour_generate(lua_State* L)
 {
     const char* target = luaL_checkstring(L, 1);
+    const char* buildDir = luaL_optstring(L, 2, NULL);
 
-    if (!Pour_Build(L, target, BUILD_GENERATE_ONLY))
+    if (!Pour_Build(L, buildDir, target, BUILD_GENERATE_ONLY))
         return luaL_error(L, "generate failed.");
 
     return 0;
@@ -86,8 +89,9 @@ static int pour_generate(lua_State* L)
 static int pour_open_in_ide(lua_State* L)
 {
     const char* target = luaL_checkstring(L, 1);
+    const char* buildDir = luaL_optstring(L, 2, NULL);
 
-    if (!Pour_Build(L, target, BUILD_GENERATE_AND_OPEN))
+    if (!Pour_Build(L, buildDir, target, BUILD_GENERATE_AND_OPEN))
         return luaL_error(L, "generate failed.");
 
     return 0;

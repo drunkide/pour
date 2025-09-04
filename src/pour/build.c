@@ -76,11 +76,10 @@ static int fn_target(lua_State* L)
     return 1;
 }
 
-static void pushDefaultSourceDir(lua_State* L)
+static void pushDefaultSourceDir(lua_State* L, const char* sourceDir)
 {
-    const char* scriptDir = Script_GetCurrentScriptDir(L);
-    if (scriptDir)
-        lua_pushstring(L, scriptDir);
+    if (sourceDir)
+        lua_pushstring(L, sourceDir);
     else
         File_PushCurrentDirectory(L);
 }
@@ -101,11 +100,12 @@ static void popSetSourceAndBuildDir(Target* target)
     lua_setfield(L, target->globalsTableIdx, "BUILD_DIR");
 }
 
-static bool loadBuildLua(lua_State* L, Target* targetOrNull, PFNNAMECALLBACK callback, void* callbackData)
+static bool loadBuildLua(lua_State* L, Target* targetOrNull,
+    const char* sourceDir, PFNNAMECALLBACK callback, void* callbackData)
 {
     int n = lua_gettop(L);
 
-    pushDefaultSourceDir(L);
+    pushDefaultSourceDir(L, sourceDir);
     size_t currentDirLen;
     const char* currentDir = lua_tolstring(L, -1, &currentDirLen);
     ++currentDirLen;
@@ -161,7 +161,7 @@ static bool loadBuildLua(lua_State* L, Target* targetOrNull, PFNNAMECALLBACK cal
     Con_PrintF(L, COLOR_WARNING, "WARNING: file \"Build.lua\" was not found, using defaults.\n");
 
     if (targetOrNull) {
-        pushDefaultSourceDir(L);
+        pushDefaultSourceDir(L, sourceDir);
         popSetSourceAndBuildDir(targetOrNull);
     }
 
@@ -169,9 +169,9 @@ static bool loadBuildLua(lua_State* L, Target* targetOrNull, PFNNAMECALLBACK cal
     return true;
 }
 
-void Pour_LoadBuildLua(lua_State* L, PFNNAMECALLBACK callback, void* callbackData)
+void Pour_LoadBuildLua(lua_State* L, const char* sourceDir, PFNNAMECALLBACK callback, void* callbackData)
 {
-    loadBuildLua(L, NULL, callback, callbackData);
+    loadBuildLua(L, NULL, sourceDir, callback, callbackData);
 }
 
 /********************************************************************************************************************/
@@ -246,7 +246,7 @@ static void setGlobals(Target* target)
     lua_setfield(L, target->globalsTableIdx, "VERBOSE");
 }
 
-bool Pour_LoadTarget(lua_State* L, Target* target, const char* name)
+bool Pour_LoadTarget(lua_State* L, Target* target, const char* sourceDir, const char* name)
 {
     target->L = L;
 
@@ -395,7 +395,7 @@ bool Pour_LoadTarget(lua_State* L, Target* target, const char* name)
     /* load Build.lua */
 
     setGlobals(target);
-    if (!loadBuildLua(L, target, NULL, NULL)) {
+    if (!loadBuildLua(L, target, sourceDir, NULL, NULL)) {
         if (!strcmp(target->name, target->shortName)) {
             Con_PrintF(L, COLOR_ERROR, "ERROR: \"%s\" was not found in Build.lua.\n",
                 target->name, target->shortName);
@@ -471,13 +471,13 @@ bool Pour_BuildTarget(Target* target, bool cleanFirst)
 
 /********************************************************************************************************************/
 
-bool Pour_Build(lua_State* L, const char* targetName, buildmode_t mode)
+bool Pour_Build(lua_State* L, const char* sourceDir, const char* targetName, buildmode_t mode)
 {
     int n = lua_gettop(L);
     luaL_checkstack(L, 1000, NULL);
 
     Target target;
-    if (!Pour_LoadTarget(L, &target, targetName)) {
+    if (!Pour_LoadTarget(L, &target, sourceDir, targetName)) {
         lua_settop(L, n);
         return false;
     }

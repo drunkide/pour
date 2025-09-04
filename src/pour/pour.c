@@ -76,7 +76,7 @@ bool Pour_Main(lua_State* L, int argc, char** argv)
                     return false;
                 }
             }
-            return Pour_Build(L, target, buildmode);
+            return Pour_Build(L, chdir, target, buildmode);
         } else if (!strcmp(argv[n], "--develop")) {
             if (n + 1 >= argc) {
                 Con_PrintF(L, COLOR_ERROR, "ERROR: missing target name after '%s'.\n", argv[n]);
@@ -87,7 +87,7 @@ bool Pour_Main(lua_State* L, int argc, char** argv)
                 Con_PrintF(L, COLOR_ERROR, "ERROR: unexpected command line argument \"%s\".\n", argv[n]);
                 return false;
             }
-            return Pour_Build(L, target, BUILD_GENERATE_AND_OPEN);
+            return Pour_Build(L, chdir, target, BUILD_GENERATE_AND_OPEN);
         } else if (!strcmp(argv[n], "-h") || !strcmp(argv[n], "--help"))
             goto help;
         else

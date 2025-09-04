@@ -39,12 +39,12 @@ typedef enum buildmode_t {
 
 typedef void (*PFNNAMECALLBACK)(lua_State* L, const char* name, void* data);
 
-void Pour_LoadBuildLua(lua_State* L, PFNNAMECALLBACK callback, void* callbackData);
+void Pour_LoadBuildLua(lua_State* L, const char* sourceDir, PFNNAMECALLBACK callback, void* callbackData);
 
-bool Pour_LoadTarget(lua_State* L, Target* target, const char* name);
+bool Pour_LoadTarget(lua_State* L, Target* target, const char* sourceDir, const char* name);
 bool Pour_GenerateTarget(Target* target, genmode_t mode);
 bool Pour_BuildTarget(Target* target, bool cleanFirst);
 
-bool Pour_Build(lua_State* L, const char* targetName, buildmode_t mode);
+bool Pour_Build(lua_State* L, const char* sourceDir, const char* targetName, buildmode_t mode);
 
 #endif
