@@ -24,7 +24,7 @@ function CMAKE(params)
         table_append(e, '-DCMAKE_VERBOSE_MAKEFILE=ON')
     end
     if not CMAKE_IS_MULTICONFIG then
-        table_append(e, '-DCMAKE_BUILD_TYPE='..TARGET_CONFIGURATION)
+        table_append(e, '-DCMAKE_BUILD_TYPE='..CMAKE_CONFIGURATION)
     end
     table_append(e, SOURCE_DIR)
     pour.run('cmake-'..CMAKE_VERSION, table.unpack(e))
@@ -39,7 +39,7 @@ function CMAKE_BUILD(params)
         table_append(e, '--verbose')
     end
     if CMAKE_IS_MULTICONFIG then
-        table_append(e, { '--config', TARGET_CONFIGURATION })
+        table_append(e, { '--config', CMAKE_CONFIGURATION })
     end
     if CMAKE_BUILD_PARAMS then
         table_append(e, CMAKE_BUILD_PARAMS)

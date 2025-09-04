@@ -5,6 +5,7 @@
 #include <common/dirs.h>
 #include <common/file.h>
 #include <common/script.h>
+#include <ctype.h>
 #include <string.h>
 
 /********************************************************************************************************************/
@@ -211,6 +212,12 @@ static void setGlobals(Target* target)
 
     lua_pushstring(L, target->configuration);
     lua_setfield(L, target->globalsTableIdx, "TARGET_CONFIGURATION");
+
+    char upper = toupper(*target->configuration);
+    lua_pushlstring(L, &upper, 1);
+    lua_pushstring(L, target->configuration + 1);
+    lua_concat(L, 2);
+    lua_setfield(L, target->globalsTableIdx, "CMAKE_CONFIGURATION");
 
     lua_pushstring(L, target->cmakeGenerator);
     lua_setfield(L, target->globalsTableIdx, "CMAKE_GENERATOR");
