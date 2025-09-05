@@ -65,6 +65,12 @@ endif()
 
 if(GCC OR CLANG)
     add_compile_options(-fno-ident)
+    # strip binaries in non-debug builds
+    if(NOT MSVC AND NOT BORLAND AND NOT WATCOM
+            AND (CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "MinSizeRel"))
+        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-s")
+        set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-s")
+    endif()
 endif()
 
 ######################################################################################################################

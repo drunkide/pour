@@ -501,7 +501,8 @@ static int cmake_generate(lua_State* L)
     }
 
     if (!Pour_Run(L, cmake, NULL, argc, argv, RUN_WAIT)) {
-        File_TryDelete(L, generated);
+        if (File_Exists(L, generated))
+            File_TryDelete(L, generated);
         return luaL_error(L, "command execution failed.");
     }
 
