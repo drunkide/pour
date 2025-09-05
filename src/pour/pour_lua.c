@@ -33,6 +33,25 @@ static int pour_chdir(lua_State* L)
     return 1;
 }
 
+static int pour_exec(lua_State* L)
+{
+    int argc = lua_gettop(L);
+    char** argv = (char**)lua_newuserdatauv(L, argc * sizeof(char**), 0);
+    for (int i = 0; i < argc; i++) {
+        size_t argLen;
+        const char* arg = luaL_checklstring(L, i + 1, &argLen);
+
+        ++argLen;
+        argv[i] = (char*)lua_newuserdatauv(L, argLen, 0);
+        memcpy(argv[i], arg, argLen);
+    }
+
+    if (!Exec_CommandV(L, argv[0], (const char* const*)argv, argc, NULL, RUN_WAIT))
+        return luaL_error(L, "command execution failed.");
+
+    return 0;
+}
+
 static int pour_file_exists(lua_State* L)
 {
     const char* file = luaL_checkstring(L, 1);
@@ -168,6 +187,7 @@ static int pour_shell_open(lua_State* L)
 static const luaL_Reg funcs[] = {
     { "build", pour_build },
     { "chdir", pour_chdir },
+    { "exec", pour_exec },
     { "file_exists", pour_file_exists },
     { "file_read", pour_file_read },
     { "file_write", pour_file_write },

@@ -231,23 +231,33 @@ bool Pour_EnsurePackageConfigured(Package* pkg)
 {
     lua_State* L = pkg->L;
 
-    const char* POST_FETCH = getString(pkg, "POST_FETCH");
-    if (!POST_FETCH)
+    getGlobal(pkg, "POST_FETCH");
+    if (lua_isnoneornil(L, -1))
         return true;
+    int idx = lua_gettop(L);
 
     lua_pushfstring(L, "%s/.pour-configured", pkg->TARGET_DIR);
     const char* checkFile = lua_tostring(L, -1);
     if (File_Exists(L, checkFile))
         return true;
 
-    lua_newtable(L);
-    if (!Script_DoFile(L, POST_FETCH, NULL, lua_gettop(L))) {
+    bool result;
+    if (lua_isfunction(L, idx))
+        result = Script_DoFunction(L, NULL, pkg->TARGET_DIR, idx);
+    else if (lua_isstring(L, idx)) {
+        lua_newtable(L);
+        result = Script_DoFile(L, lua_tostring(L, idx), NULL, lua_gettop(L));
+    } else {
+        Con_PrintF(L, COLOR_ERROR, "ERROR: '%s': %s should be string or table.\n", pkg->name, "POST_FETCH");
+        return false;
+    }
+
+    if (!result) {
         Con_PrintF(L, COLOR_ERROR, "ERROR: unable to configure package '%s'.\n", pkg->name);
         return false;
     }
 
     File_Overwrite(L, checkFile, "", 0);
-
     return true;
 }
 

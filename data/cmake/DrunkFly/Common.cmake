@@ -274,4 +274,10 @@ function(enable_maximum_warnings)
             -Wextra
             )
     endif()
+
+    if(EMSCRIPTEN)
+        extra_compile_options(${_prefix}
+            -Wno-c99-extensions
+            )
+    endif()
 endfunction()
