@@ -46,5 +46,6 @@ bool Pour_GenerateTarget(Target* target, genmode_t mode);
 bool Pour_BuildTarget(Target* target, bool cleanFirst);
 
 bool Pour_Build(lua_State* L, const char* sourceDir, const char* targetName, buildmode_t mode);
+bool Pour_BuildAllTargets(lua_State* L, const char* sourceDir, buildmode_t mode);
 
 #endif

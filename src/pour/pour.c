@@ -18,6 +18,24 @@ STRUCT(PackageName) {
     const char* name;
 };
 
+static bool parseFlags(lua_State* L, int argc, char** argv, int n, buildmode_t* buildmode)
+{
+    for (++n; n < argc; ++n) {
+        if (!strcmp(argv[n], "--verbose"))
+            g_verbose = true;
+        else if (!strcmp(argv[n], "--force")) {
+            if (*buildmode == BUILD_GENERATE_ONLY)
+                *buildmode = BUILD_GENERATE_ONLY_FORCE;
+            else if (*buildmode == BUILD_NORMAL)
+                *buildmode = BUILD_REBUILD;
+        } else {
+            Con_PrintF(L, COLOR_ERROR, "ERROR: unexpected command line argument \"%s\".\n", argv[n]);
+            return false;
+        }
+    }
+    return true;
+}
+
 bool Pour_Main(lua_State* L, int argc, char** argv)
 {
     const char* chdir = NULL;
@@ -63,20 +81,13 @@ bool Pour_Main(lua_State* L, int argc, char** argv)
                 return false;
             }
             const char* target = argv[++n];
-            for (++n; n < argc; ++n) {
-                if (!strcmp(argv[n], "--verbose"))
-                    g_verbose = true;
-                else if (!strcmp(argv[n], "--force")) {
-                    if (buildmode == BUILD_GENERATE_ONLY)
-                        buildmode = BUILD_GENERATE_ONLY_FORCE;
-                    else if (buildmode == BUILD_NORMAL)
-                        buildmode = BUILD_REBUILD;
-                } else {
-                    Con_PrintF(L, COLOR_ERROR, "ERROR: unexpected command line argument \"%s\".\n", argv[n]);
-                    return false;
-                }
-            }
-            return Pour_Build(L, chdir, target, buildmode);
+            return parseFlags(L, argc, argv, n, &buildmode) && Pour_Build(L, chdir, target, buildmode);
+        } else if (!strcmp(argv[n], "--generate-all-targets")) {
+            buildmode = BUILD_GENERATE_ONLY;
+            return parseFlags(L, argc, argv, n, &buildmode) && Pour_BuildAllTargets(L, chdir, buildmode);
+        } else if (!strcmp(argv[n], "--build-all-targets")) {
+            buildmode = BUILD_NORMAL;
+            return parseFlags(L, argc, argv, n, &buildmode) && Pour_BuildAllTargets(L, chdir, buildmode);
         } else if (!strcmp(argv[n], "--develop")) {
             if (n + 1 >= argc) {
                 Con_PrintF(L, COLOR_ERROR, "ERROR: missing target name after '%s'.\n", argv[n]);
@@ -120,6 +131,8 @@ bool Pour_Main(lua_State* L, int argc, char** argv)
             Con_Print(L, COLOR_DEFAULT, "    or pour [options] --script <file> [args...]\n");
             Con_Print(L, COLOR_DEFAULT, "    or pour [options] --generate <target> [--force]\n");
             Con_Print(L, COLOR_DEFAULT, "    or pour [options] --build <target> [--force]\n");
+            Con_Print(L, COLOR_DEFAULT, "    or pour [options] --generate-all-targets [--force]\n");
+            Con_Print(L, COLOR_DEFAULT, "    or pour [options] --build-all-targets [--force]\n");
             Con_Print(L, COLOR_DEFAULT, "    or pour [options] --develop <target>\n");
             Con_Print(L, COLOR_DEFAULT, "\n");
             Con_Print(L, COLOR_DEFAULT, "where commands are:\n");
@@ -128,6 +141,8 @@ bool Pour_Main(lua_State* L, int argc, char** argv)
             Con_Print(L, COLOR_DEFAULT, " --script <file>        execute the specified Lua script.\n");
             Con_Print(L, COLOR_DEFAULT, " --generate <target>    generate project for the specified target.\n");
             Con_Print(L, COLOR_DEFAULT, " --build <target>       build project for the specified target.\n");
+            Con_Print(L, COLOR_DEFAULT, " --generate-all-targets generate project for all targets in Build.lua.\n");
+            Con_Print(L, COLOR_DEFAULT, " --build-all-targets    build project for all targets in Build.lua.\n");
             Con_Print(L, COLOR_DEFAULT, " --develop <target>     open project for the specified target in IDE.\n");
             Con_Print(L, COLOR_DEFAULT, "\n");
             Con_Print(L, COLOR_DEFAULT, "where options are:\n");

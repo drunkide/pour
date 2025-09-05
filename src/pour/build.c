@@ -11,6 +11,58 @@
 
 /********************************************************************************************************************/
 
+static void initTables(lua_State* L, int globalsTableIdx)
+{
+    lua_newtable(L);
+    lua_setfield(L, globalsTableIdx, "CMAKE_PARAMS");
+
+    lua_newtable(L);
+    lua_setfield(L, globalsTableIdx, "CMAKE_BUILD_PARAMS");
+
+    lua_createtable(L, 1, 0);
+    lua_pushstring(L, g_cmakeModulesDir);
+    lua_rawseti(L, -2, 1);
+    lua_setfield(L, globalsTableIdx, "CMAKE_MODULE_PATH");
+}
+
+static void setGlobals(lua_State*L, int globalsTableIdx, Target* targetOrNull)
+{
+    lua_pushstring(L, targetOrNull ? targetOrNull->name : NULL);
+    lua_setfield(L, globalsTableIdx, "TARGET");
+
+    lua_pushstring(L, targetOrNull ? targetOrNull->platform : NULL);
+    lua_setfield(L, globalsTableIdx, "TARGET_PLATFORM");
+
+    lua_pushstring(L, targetOrNull ? targetOrNull->compiler : NULL);
+    lua_setfield(L, globalsTableIdx, "TARGET_COMPILER");
+
+    lua_pushstring(L, targetOrNull ? targetOrNull->configuration : NULL);
+    lua_setfield(L, globalsTableIdx, "TARGET_CONFIGURATION");
+
+    if (!targetOrNull || !targetOrNull->configuration)
+        lua_pushnil(L);
+    else {
+        char upper = toupper(*targetOrNull->configuration);
+        lua_pushlstring(L, &upper, 1);
+        lua_pushstring(L, targetOrNull->configuration + 1);
+        lua_concat(L, 2);
+    }
+    lua_setfield(L, globalsTableIdx, "CMAKE_CONFIGURATION");
+
+    lua_pushstring(L, targetOrNull ? targetOrNull->cmakeGenerator : NULL);
+    lua_setfield(L, globalsTableIdx, "CMAKE_GENERATOR");
+
+    if (targetOrNull) {
+        lua_pushboolean(L, targetOrNull->isMulticonfig);
+        lua_setfield(L, globalsTableIdx, "CMAKE_IS_MULTICONFIG");
+    }
+
+    lua_pushboolean(L, g_verbose);
+    lua_setfield(L, globalsTableIdx, "VERBOSE");
+}
+
+/********************************************************************************************************************/
+
 STRUCT(BuildLuaContext)
 {
     Target* targetOrNull;
@@ -146,12 +198,15 @@ static bool loadBuildLua(lua_State* L, Target* targetOrNull,
         const char* file = lua_pushfstring(L, "%s/Build.lua", dir);
         if (File_Exists(L, file)) {
             int globalsTableIdx;
-            if (!targetOrNull)
+            if (!targetOrNull) {
                 globalsTableIdx = Pour_PushNewGlobalsTable(L);
-            else {
+                initTables(L, globalsTableIdx);
+            } else {
                 globalsTableIdx = targetOrNull->globalsTableIdx;
                 lua_pushvalue(L, globalsTableIdx);
             }
+
+            setGlobals(L, globalsTableIdx, targetOrNull);
 
             BuildLuaContext* context = (BuildLuaContext*)lua_newuserdatauv(L, sizeof(BuildLuaContext), 0);
             context->targetOrNull = targetOrNull;
@@ -240,43 +295,7 @@ static int getFunction(Target* target, const char* name)
     return lua_gettop(L);
 }
 
-static void setGlobals(Target* target)
-{
-    lua_State* L = target->L;
-
-    lua_pushstring(L, target->name);
-    lua_setfield(L, target->globalsTableIdx, "TARGET");
-
-    lua_pushstring(L, target->platform);
-    lua_setfield(L, target->globalsTableIdx, "TARGET_PLATFORM");
-
-    lua_pushstring(L, target->compiler);
-    lua_setfield(L, target->globalsTableIdx, "TARGET_COMPILER");
-
-    lua_pushstring(L, target->configuration);
-    lua_setfield(L, target->globalsTableIdx, "TARGET_CONFIGURATION");
-
-    if (!target->configuration)
-        lua_pushnil(L);
-    else {
-        char upper = toupper(*target->configuration);
-        lua_pushlstring(L, &upper, 1);
-        lua_pushstring(L, target->configuration + 1);
-        lua_concat(L, 2);
-    }
-    lua_setfield(L, target->globalsTableIdx, "CMAKE_CONFIGURATION");
-
-    lua_pushstring(L, target->cmakeGenerator);
-    lua_setfield(L, target->globalsTableIdx, "CMAKE_GENERATOR");
-
-    lua_pushboolean(L, target->isMulticonfig);
-    lua_setfield(L, target->globalsTableIdx, "CMAKE_IS_MULTICONFIG");
-
-    lua_pushboolean(L, g_verbose);
-    lua_setfield(L, target->globalsTableIdx, "VERBOSE");
-}
-
-bool Pour_LoadTarget(lua_State* L, Target* target, const char* sourceDir, const char* name)
+static bool Pour_PreLoadTarget(lua_State* L, Target* target, const char* name)
 {
     target->L = L;
 
@@ -349,18 +368,8 @@ bool Pour_LoadTarget(lua_State* L, Target* target, const char* sourceDir, const 
     target->cmakeGenerator = "";
     target->isMulticonfig = false;
 
-    setGlobals(target);
-
-    lua_newtable(L);
-    lua_setfield(L, target->globalsTableIdx, "CMAKE_PARAMS");
-
-    lua_newtable(L);
-    lua_setfield(L, target->globalsTableIdx, "CMAKE_BUILD_PARAMS");
-
-    lua_createtable(L, 1, 0);
-    lua_pushstring(L, g_cmakeModulesDir);
-    lua_rawseti(L, -2, 1);
-    lua_setfield(L, target->globalsTableIdx, "CMAKE_MODULE_PATH");
+    initTables(L, target->globalsTableIdx);
+    setGlobals(L, target->globalsTableIdx, target);
 
     /* load target lua */
 
@@ -408,28 +417,21 @@ bool Pour_LoadTarget(lua_State* L, Target* target, const char* sourceDir, const 
         return false;
     }
 
-    /* ensure CMAKE_BUILD_TYPE */
+    return true;
+}
 
-    if (!target->isMulticonfig && !target->configuration) {
-        target->configuration = "release";
-        Con_PrintF(L, COLOR_WARNING,
-            "WARNING: configuration was not specified for target \"%s\", building \"%s\".\n",
-            target->name, target->configuration);
-
-        target->name = lua_pushfstring(L, "%s:%s", target->name, target->configuration);
-    }
-
+static bool Pour_PrepareTarget(lua_State* L, Target* target, const char* sourceDir)
+{
     /* prepare */
 
     if (target->prepareFn > 0) {
-        setGlobals(target);
+        setGlobals(L, target->globalsTableIdx, target);
         lua_pushvalue(L, target->prepareFn);
         lua_call(L, 0, 0);
     }
 
     /* load Build.lua */
 
-    setGlobals(target);
     if (!loadBuildLua(L, target, sourceDir, NULL, NULL)) {
         if (!strcmp(target->name, target->shortName)) {
             Con_PrintF(L, COLOR_ERROR, "ERROR: \"%s\" was not found in Build.lua.\n",
@@ -448,6 +450,27 @@ bool Pour_LoadTarget(lua_State* L, Target* target, const char* sourceDir, const 
     target->cmakeVersion = getString(target, "CMAKE_VERSION");
 
     return true;
+}
+
+bool Pour_LoadTarget(lua_State* L, Target* target, const char* sourceDir, const char* name)
+{
+    if (!Pour_PreLoadTarget(L, target, name))
+        return false;
+
+    /* ensure CMAKE_BUILD_TYPE */
+
+    if (!target->isMulticonfig && !target->configuration) {
+        target->configuration = "release";
+        Con_PrintF(L, COLOR_WARNING,
+            "WARNING: configuration was not specified for target \"%s\", building \"%s\".\n",
+            target->name, target->configuration);
+
+        target->name = lua_pushfstring(L, "%s:%s", target->name, target->configuration);
+    }
+
+    /* prepare */
+
+    return Pour_PrepareTarget(L, target, sourceDir);
 }
 
 /********************************************************************************************************************/
@@ -525,7 +548,7 @@ bool Pour_GenerateTarget(Target* target, genmode_t mode)
     if (!Script_LoadFunctions(L, target->globalsTableIdx))
         return false;
 
-    setGlobals(target);
+    setGlobals(L, target->globalsTableIdx, target);
     if (!Script_DoFunction(L, target->luaScriptDir, target->buildDir, target->generateFn))
         return false;
 
@@ -539,7 +562,7 @@ bool Pour_BuildTarget(Target* target, bool cleanFirst)
     if (!Script_LoadFunctions(L, target->globalsTableIdx))
         return false;
 
-    setGlobals(target);
+    setGlobals(L, target->globalsTableIdx, target);
 
     lua_pushboolean(L, cleanFirst);
     lua_setfield(L, target->globalsTableIdx, "CMAKE_FORCE_REBUILD");
@@ -548,6 +571,70 @@ bool Pour_BuildTarget(Target* target, bool cleanFirst)
 }
 
 /********************************************************************************************************************/
+
+static bool Pour_GenerateAndBuild(lua_State* L, Target* target, buildmode_t mode)
+{
+    genmode_t genmode = GEN_NORMAL;
+    if (mode == BUILD_GENERATE_ONLY)
+        genmode = GEN_FORCE;
+    else if (mode == BUILD_GENERATE_ONLY_FORCE || mode == BUILD_REBUILD)
+        genmode = GEN_FORCE_REBUILD;
+
+    if (!Pour_GenerateTarget(target, genmode))
+        return false;
+
+    switch (mode) {
+        case BUILD_GENERATE_ONLY:
+        case BUILD_GENERATE_ONLY_FORCE:
+            break;
+
+        case BUILD_NORMAL:
+        case BUILD_REBUILD:
+            if (!Pour_BuildTarget(target, mode == BUILD_REBUILD))
+                return false;
+            break;
+
+        case BUILD_GENERATE_AND_OPEN: {
+            const char* CMakeCache_txt = lua_pushfstring(L, "%s/%s", target->buildDir, "CMakeCache.txt");
+            if (!File_Exists(L, CMakeCache_txt)) {
+                Con_PrintF(L, COLOR_ERROR, "ERROR: file \"%s\" was not found.\n", CMakeCache_txt);
+                return false;
+            }
+
+            const char* data = File_PushContents(L, CMakeCache_txt, NULL);
+
+            static const char param[] = "CMAKE_PROJECT_NAME:STATIC=";
+            const char* p = strstr(data, param);
+            if (!p) {
+                Con_PrintF(L, COLOR_ERROR, "ERROR: project name was not found in \"%s\".\n", CMakeCache_txt);
+                return false;
+            }
+
+            p += sizeof(param) - 1;
+            const char* end = strpbrk(p, "\r\n");
+            if (!end || end == p) {
+                Con_PrintF(L, COLOR_ERROR, "ERROR: can't extract project name from \"%s\".\n", CMakeCache_txt);
+                return false;
+            }
+
+            lua_pushstring(L, target->buildDir);
+            lua_pushliteral(L, "/");
+            lua_pushlstring(L, p, (size_t)(end - p));
+            lua_pushliteral(L, ".sln");
+            lua_concat(L, 4);
+            const char* slnFile = lua_tostring(L, -1);
+            if (File_Exists(L, slnFile)) {
+                File_ShellOpen(L, slnFile);
+                break;
+            }
+
+            Con_PrintF(L, COLOR_ERROR, "ERROR: file not found: \"%s\".\n", slnFile);
+            return false;
+        }
+    }
+
+    return true;
+}
 
 bool Pour_Build(lua_State* L, const char* sourceDir, const char* targetName, buildmode_t mode)
 {
@@ -560,72 +647,73 @@ bool Pour_Build(lua_State* L, const char* sourceDir, const char* targetName, bui
         return false;
     }
 
-    genmode_t genmode = GEN_NORMAL;
-    if (mode == BUILD_GENERATE_ONLY)
-        genmode = GEN_FORCE;
-    else if (mode == BUILD_GENERATE_ONLY_FORCE || mode == BUILD_REBUILD)
-        genmode = GEN_FORCE_REBUILD;
+    bool result = Pour_GenerateAndBuild(L, &target, mode);
 
-    if (!Pour_GenerateTarget(&target, genmode)) {
-        lua_settop(L, n);
-        return false;
+    lua_settop(L, n);
+    return result;
+}
+
+/********************************************************************************************************************/
+
+STRUCT(AllTargetsContext) {
+    const char* sourceDir;
+    buildmode_t mode;
+};
+
+static void name_callback(lua_State* L, const char* name, void* data)
+{
+    AllTargetsContext* context = (AllTargetsContext*)data;
+    const char* pendingBuild = NULL;
+    int n = lua_gettop(L);
+
+    int count = 0;
+    for (const char* p = name; *p; ++p) {
+        if (*p == ':')
+            ++count;
     }
 
-    switch (mode) {
-        case BUILD_GENERATE_ONLY:
-        case BUILD_GENERATE_ONLY_FORCE:
-            break;
+    Con_PrintSeparator(L);
+    Con_PrintF(L, COLOR_STATUS, " %s\n", name);
+    if (count > 2)
+        Con_PrintSeparator(L);
 
-        case BUILD_NORMAL:
-        case BUILD_REBUILD:
-            if (!Pour_BuildTarget(&target, mode == BUILD_REBUILD)) {
-                lua_settop(L, n);
-                return false;
-            }
-            break;
+    Target target;
+    if (!Pour_PreLoadTarget(L, &target, name))
+        luaL_error(L, "unable to load configuration for target \"%s\".", name);
 
-        case BUILD_GENERATE_AND_OPEN: {
-            const char* CMakeCache_txt = lua_pushfstring(L, "%s/%s", target.buildDir, "CMakeCache.txt");
-            if (!File_Exists(L, CMakeCache_txt)) {
-                Con_PrintF(L, COLOR_ERROR, "ERROR: file \"%s\" was not found.\n", CMakeCache_txt);
-                lua_settop(L, n);
-                return false;
-            }
+    if (target.isMulticonfig || target.configuration)
+        Con_PrintSeparator(L);
+    else {
+        pendingBuild = lua_pushfstring(L, "%s:release", target.name);
+        target.configuration = "debug";
+        target.name = lua_pushfstring(L, "%s:%s", target.name, target.configuration);
 
-            const char* data = File_PushContents(L, CMakeCache_txt, NULL);
-
-            static const char param[] = "CMAKE_PROJECT_NAME:STATIC=";
-            const char* p = strstr(data, param);
-            if (!p) {
-                Con_PrintF(L, COLOR_ERROR, "ERROR: project name was not found in \"%s\".\n", CMakeCache_txt);
-                lua_settop(L, n);
-                return false;
-            }
-
-            p += sizeof(param) - 1;
-            const char* end = strpbrk(p, "\r\n");
-            if (!end || end == p) {
-                Con_PrintF(L, COLOR_ERROR, "ERROR: can't extract project name from \"%s\".\n", CMakeCache_txt);
-                lua_settop(L, n);
-                return false;
-            }
-
-            lua_pushstring(L, target.buildDir);
-            lua_pushliteral(L, "/");
-            lua_pushlstring(L, p, (size_t)(end - p));
-            lua_pushliteral(L, ".sln");
-            lua_concat(L, 4);
-            const char* slnFile = lua_tostring(L, -1);
-            if (File_Exists(L, slnFile)) {
-                File_ShellOpen(L, slnFile);
-                break;
-            }
-
-            Con_PrintF(L, COLOR_ERROR, "ERROR: file not found: \"%s\".\n", slnFile);
-            lua_settop(L, n);
-            return false;
-        }
+        Con_PrintF(L, COLOR_STATUS, " --> %s\n", target.name);
+        Con_PrintSeparator(L);
     }
+
+    if (!Pour_PrepareTarget(L, &target, context->sourceDir))
+        luaL_error(L, "unable to load configuration for target \"%s\".", target.name);
+
+    if (!Pour_GenerateAndBuild(L, &target, context->mode))
+        luaL_error(L, "unable to build target \"%s\".", target.name);
+
+    if (pendingBuild)
+        name_callback(L, pendingBuild, data);
+
+    lua_settop(L, n);
+}
+
+bool Pour_BuildAllTargets(lua_State* L, const char* sourceDir, buildmode_t mode)
+{
+    int n = lua_gettop(L);
+    luaL_checkstack(L, 1000, NULL);
+
+    AllTargetsContext context;
+    context.sourceDir = sourceDir;
+    context.mode = mode;
+
+    Pour_LoadBuildLua(L, sourceDir, name_callback, &context);
 
     lua_settop(L, n);
     return true;
