@@ -235,7 +235,7 @@ static void dosbox_write_config(lua_State* L, const char* path)
     lua_pushliteral(L, "nicbase=300\n");
     lua_pushliteral(L, "nicirq=3\n");
     lua_pushliteral(L, "backend=slirp\n");
-    lua_pushliteral(L, "macaddr=BA:D0:C0:DE:CC:DD\n");
+    lua_pushfstring(L, "macaddr=%s\n", opt_macaddr);
     if (g_configSys) {
         lua_pushliteral(L, "\n");
         lua_pushliteral(L, "[config]\n");

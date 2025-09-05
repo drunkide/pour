@@ -114,4 +114,9 @@ DOSBOX_OPTION(
     "disabled"
     )
 
+DOSBOX_OPTION(
+    macaddr,
+    "AC:DE:48:BA:DC:0D"
+    )
+
 #undef DOSBOX_OPTION
