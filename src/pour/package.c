@@ -78,6 +78,16 @@ static bool loadPackageConfig(Package* pkg)
         return false;
     }
 
+  #ifdef _WIN32
+    if (pkg->TARGET_DIR) {
+        size_t len = strlen(pkg->TARGET_DIR) + 1;
+        char* dir = (char*)lua_newuserdatauv(L, len, 0);
+        memcpy(dir, pkg->TARGET_DIR, len);
+        Dir_FromNativeSeparators(dir);
+        pkg->TARGET_DIR = dir;
+    }
+  #endif
+
     lua_rawgetp(L, LUA_REGISTRYINDEX, &PACKAGE_DIR);
     lua_pushstring(L, pkg->TARGET_DIR);
     lua_setfield(L, -2, pkg->name);
