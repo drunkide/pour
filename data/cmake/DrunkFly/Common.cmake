@@ -197,6 +197,65 @@ function(extra_compile_options)
 endfunction()
 
 #
+# Add extra linker options
+#
+#   extra_linker_options([TARGET target] options)
+#
+#   options can be additionally prefixed with:
+#     ALL       all compilers (default)
+#     GCC       GCC only
+#     GCC_CLANG GCC and Clang only
+#     CLANG     Clang only
+#     MINGW     GCC/Clang on Windows only
+#     MSVC      MS Visual C++ only
+#     BORLAND   Borland only
+#     WATCOM    Watcom only
+#
+function(extra_linker_options)
+    set(_single TARGET)
+    set(_multi GCC_CLANG GCC CLANG MINGW MSVC BORLAND WATCOM)
+    set(_options)
+    cmake_parse_arguments(_opt "${_options}" "${_single}" "${_multi}" ${ARGN})
+
+    macro(_extra_linker_options_add)
+        foreach(_arg ${ARGN})
+            if(_opt_TARGET)
+                set_property(TARGET "${_opt_TARGET}" APPEND_STRING PROPERTY LINK_FLAGS " ${_arg}")
+            else()
+                set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${_arg}")
+                set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${_arg}")
+                set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS}" PARENT_SCOPE)
+                set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS}" PARENT_SCOPE)
+            endif()
+        endforeach()
+    endmacro()
+
+    _extra_linker_options_add(${_opt_UNPARSED_ARGUMENTS} ${_opt_ALL})
+
+    if(GCC OR CLANG)
+        _extra_linker_options_add(${_opt_GCC_CLANG})
+    endif()
+    if(GCC)
+        _extra_linker_options_add(${_opt_GCC})
+    endif()
+    if(CLANG)
+        _extra_linker_options_add(${_opt_CLANG})
+    endif()
+    if(MINGW)
+        _extra_linker_options_add(${_opt_MINGW})
+    endif()
+    if(MSVC)
+        _extra_linker_options_add(${_opt_MSVC})
+    endif()
+    if(BORLAND)
+        _extra_linker_options_add(${_opt_BORLAND})
+    endif()
+    if(WATCOM)
+        _extra_linker_options_add(${_opt_WATCOM})
+    endif()
+endfunction()
+
+#
 # Ask C compiler to enforce C89 limitations (currently only GCC and Clang)
 #
 #   force_c89() - globally for everything after this call
