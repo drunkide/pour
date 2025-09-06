@@ -14,6 +14,8 @@ end
 function CMAKE(params)
     local e = {}
     table_append(e, '--no-warn-unused-cli')
+    table_append(e, '-DPOUR_PLATFORM='..TARGET_PLATFORM)
+    table_append(e, '-DPOUR_COMPILER='..TARGET_COMPILER)
     table_append(e, '-DCMAKE_MODULE_PATH='..table.concat(CMAKE_MODULE_PATH, ';'))
     if CMAKE_GENERATOR ~= '' then
         table_append(e, { '-G', CMAKE_GENERATOR })
@@ -33,6 +35,7 @@ function CMAKE(params)
         table_append(e, '-DCMAKE_VERBOSE_MAKEFILE=ON')
     end
     if not CMAKE_IS_MULTICONFIG then
+        table_append(e, '-DPOUR_CONFIGURATION='..CMAKE_CONFIGURATION)
         table_append(e, '-DCMAKE_BUILD_TYPE='..CMAKE_CONFIGURATION)
     end
     table_append(e, SOURCE_DIR)
