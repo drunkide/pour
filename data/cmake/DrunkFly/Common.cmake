@@ -30,6 +30,7 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 4)
 else()
     set(CPU32 FALSE)
     set(CPU64 TRUE)
+    add_definitions(-DCPU64)
 endif()
 
 ######################################################################################################################
