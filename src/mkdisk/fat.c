@@ -379,6 +379,11 @@ void fat_add_file(FSDir* parent, const char* name, const void* data, size_t size
     parent->entries[index].attrib = ATTR_ARCHIVE;
     parent->entries[index].firstCluster = cluster;
     parent->entries[index].size = size;
+
+    for (size_t i = 0; i < index; i++) {
+        if (!strcmp(parent->entries[i].name, parent->entries[index].name))
+            luaL_error(dsk->L, "duplicate file name \"%s\".", name);
+    }
 }
 
 void Fat_Write(Disk* dsk)

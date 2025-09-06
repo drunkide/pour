@@ -552,6 +552,11 @@ void Ext2_AddFile(Ext2* e2, FSDir* parent, const char* name, const void* data, s
     inode_ptr->creation_time = e2->t;
     inode_ptr->last_modify_time = e2->t;
 
+    for (size_t i = 0; i < parent->entryCount; i++) {
+        if (!strcmp(parent->entries[i].name, name))
+            luaL_error(e2->L, "duplicate file name \"%s\".", name);
+    }
+
     ext2_add_direntry(e2, parent, name, inode);
 
     unsigned type = (meta->type_and_perm & EXT2_TYPE_MASK);

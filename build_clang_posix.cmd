@@ -20,6 +20,7 @@ call "%~dp0tools\cmake-3.5.2.cmd" ^
     -DCMAKE_C_COMPILER_WORKS=TRUE ^
     -DCMAKE_CXX_COMPILER=clang ^
     -DCMAKE_CXX_COMPILER_WORKS=TRUE ^
+    -DCMAKE_SIZEOF_VOID_P=4 ^
     -DCMAKE_MAKE_PROGRAM="%~dp0tools\ninja.cmd" ^
     -DCMAKE_AR="%POUR_PACKAGE_DIR%\win32-clang-4.0.0\bin\llvm-ar" ^
     -DCMAKE_RANLIB="%POUR_PACKAGE_DIR%\win32-clang-4.0.0\bin\llvm-ranlib" ^

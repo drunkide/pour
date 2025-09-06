@@ -9,4 +9,7 @@ if HOST_WINDOWS then
         LIB = TARGET_DIR..'/disk_c/MSVC20/LIB',
         INCLUDE = TARGET_DIR..'/disk_c/MSVC20/INCLUDE'
     }
+    EXECUTABLE = {
+        ['msvc-lib'] = TARGET_DIR..'/disk_c/MSVC20/BIN/LIB.EXE',
+    }
 end
