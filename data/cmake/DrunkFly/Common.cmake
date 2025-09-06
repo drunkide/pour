@@ -341,6 +341,7 @@ function(enable_maximum_warnings)
         extra_compile_options(${_prefix}
             -Wno-c99-extensions
             -Wno-gnu-zero-variadic-macro-arguments
+            -Wno-dollar-in-identifier-extension
             )
     endif()
 endfunction()
