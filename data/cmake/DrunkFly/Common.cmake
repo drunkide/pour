@@ -287,6 +287,20 @@ function(enable_maximum_warnings)
 endfunction()
 
 #
+# Adds -fvisibility=hidden for compilers that are known to support it
+#
+function(gcc_visibility_hidden)
+    if(CLANG)
+        add_definitions(-fvisibility=hidden)
+    elseif(GCC AND NOT DJGPP)
+        if(CMAKE_C_COMPILER_VERSION VERSION_GREATER "4.5" OR
+                (NOT WIN32 AND CMAKE_C_COMPILER_VERSION VERSION_GREATER "4.0"))
+            add_definitions(-fvisibility=hidden)
+        endif()
+    endif()
+endfunction()
+
+#
 # Creates source groups and configures compilation for platform-specific source files.
 # Input file list should be relative to <directory>.
 # List of source files is written into <output> variable for later use.
