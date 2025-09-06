@@ -2,7 +2,7 @@
 ----------------------------------------------------------------------------------------------------------------------
 if HOST_WINDOWS then
 
-CMAKE_VERSION = '3.5.2'
+CMAKE_VERSION = '3.31.4'
 CMAKE_GENERATOR = 'MinGW Makefiles'
 
 function prepare()
