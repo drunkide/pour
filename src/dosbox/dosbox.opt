@@ -105,6 +105,11 @@ DOSBOX_OPTION(
     )
 
 DOSBOX_OPTION(
+    hma,
+    NULL
+    )
+
+DOSBOX_OPTION(
     umb,
     "false"
     )

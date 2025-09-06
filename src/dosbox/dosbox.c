@@ -204,6 +204,7 @@ static void dosbox_write_config(lua_State* L, const char* path)
     lua_pushfstring(L, "xms=%s\n", opt_xms);
     lua_pushfstring(L, "ems=%s\n", opt_ems);
     lua_pushfstring(L, "umb=%s\n", opt_umb);
+    OPT_pushfstring(L, "hma=%s\n", opt_hma);
     lua_pushliteral(L, "network redirector=false\n");
     lua_pushliteral(L, "keyboardlayout=auto\n");
     lua_pushliteral(L, "hard drive data rate limit=0\n");
