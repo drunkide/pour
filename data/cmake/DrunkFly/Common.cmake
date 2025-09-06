@@ -278,6 +278,60 @@ function(enable_maximum_warnings)
     if(EMSCRIPTEN)
         extra_compile_options(${_prefix}
             -Wno-c99-extensions
+            -Wno-gnu-zero-variadic-macro-arguments
             )
     endif()
 endfunction()
+
+#
+# Creates source groups and configures compilation for platform-specific source files.
+# Input file list should be relative to <directory>.
+# List of source files is written into <output> variable for later use.
+#
+#   create_source_list(output directory
+#       [SOURCES] sources
+#       [HEADERS headers]
+#       [HTML5_SOURCES sources]
+#       [LINUX_SOURCES sources]
+#       [MSDOS_SOURCES sources]
+#       [MSWIN_SOURCES sources]
+#   )
+#
+macro(create_source_list _output _directory)
+    set(_options)
+    set(_single)
+    set(_multi SOURCES HEADERS HTML5_SOURCES LINUX_SOURCES MSDOS_SOURCES MSWIN_SOURCES)
+    cmake_parse_arguments(_opt "${_options}" "${_single}" "${_multi}" ${ARGN})
+
+    foreach(_file
+            ${_opt_UNPARSED_ARGUMENTS}
+            ${_opt_SOURCES}
+            ${_opt_HEADERS}
+            ${_opt_HTML5_SOURCES}
+            ${_opt_LINUX_SOURCES}
+            ${_opt_MSDOS_SOURCES}
+            ${_opt_MSWIN_SOURCES}
+            )
+        get_filename_component(_dir "${_file}" DIRECTORY)
+        string(REPLACE "/" "\\" _dir "Source Files/${_dir}")
+        source_group("${_dir}" FILES "${_file}")
+        list(APPEND ${_output} "${_directory}/${_file}")
+    endforeach()
+
+    if(_opt_HEADERS)
+        set_source_files_properties(${_opt_HEADERS} PROPERTIES HEADER_FILE_ONLY TRUE)
+    endif()
+
+    if(_opt_HTML5_SOURCES AND NOT EMSCRIPTEN)
+        set_source_files_properties(${_opt_HTML5_SOURCES} PROPERTIES HEADER_FILE_ONLY TRUE)
+    endif()
+    if(_opt_LINUX_SOURCES AND NOT LINUX)
+        set_source_files_properties(${_opt_LINUX_SOURCES} PROPERTIES HEADER_FILE_ONLY TRUE)
+    endif()
+    if(_opt_MSDOS_SOURCES AND NOT MSDOS)
+        set_source_files_properties(${_opt_MSDOS_SOURCES} PROPERTIES HEADER_FILE_ONLY TRUE)
+    endif()
+    if(_opt_MSWIN_SOURCES AND NOT WIN32)
+        set_source_files_properties(${_opt_MSWIN_SOURCES} PROPERTIES HEADER_FILE_ONLY TRUE)
+    endif()
+endmacro()
