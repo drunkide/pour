@@ -29,7 +29,7 @@ static char marker_LIST;
 
 /********************************************************************************************************************/
 
-static void MkDisk_ReadMetaFile(Disk* dsk, uint16_t default_perm, const char* file, ext2_meta* out)
+static bool MkDisk_ReadMetaFile(Disk* dsk, uint16_t default_perm, const char* file, ext2_meta* out)
 {
     lua_State* L = dsk->L;
 
@@ -38,7 +38,7 @@ static void MkDisk_ReadMetaFile(Disk* dsk, uint16_t default_perm, const char* fi
     out->gid = 0;
 
     if (!File_Exists(L, file))
-        return;
+        return false;
 
     const char* str = File_PushContents(L, file, NULL);
 
@@ -66,6 +66,8 @@ static void MkDisk_ReadMetaFile(Disk* dsk, uint16_t default_perm, const char* fi
     out->type_and_perm |= t;
     out->uid = u;
     out->gid = g;
+
+    return true;
 }
 
 static void MkDisk_ReadMetaFileForDirectory(Disk* dsk, const char* dirName, ext2_meta* out)
@@ -85,7 +87,18 @@ static void MkDisk_ReadMetaFileForFile(Disk* dsk, const char* fileName, ext2_met
     lua_State* L = dsk->L;
     const char* buf = lua_pushfstring(L, "%s[meta]", fileName);
 
-    MkDisk_ReadMetaFile(dsk, EXT2_TYPE_FILE | 0644, buf, out);
+    if (!MkDisk_ReadMetaFile(dsk, EXT2_TYPE_FILE | 0644, buf, out)) {
+        File* f = File_PushOpen(L, fileName, FILE_OPEN_SEQUENTIAL_READ);
+        if (File_GetSize(f) > 4) {
+            char buf[4];
+            File_Read(f, buf, 4);
+            if (buf[0] == 0x7F && buf[1] == 'E' && buf[2] == 'L' && buf[3] == 'F')
+                out->type_and_perm |= 0755;
+        }
+        File_Close(f);
+        lua_pop(L, 1);
+    }
+
     if ((out->type_and_perm & EXT2_TYPE_MASK) == EXT2_TYPE_DIRECTORY)
         luaL_error(L, "invalid meta file: %s", buf);
 
