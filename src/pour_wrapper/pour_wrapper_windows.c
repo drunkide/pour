@@ -261,7 +261,7 @@ void entry(void)
 
         *mycpy(pSlash, "\\CMakeLists.txt") = 0;
         if (GetFileAttributes(path) == INVALID_FILE_ATTRIBUTES) {
-            TCHAR* dst = mycpy(buf, "git clone https://github.com/thirdpartystuff/pour \"");
+            TCHAR* dst = mycpy(buf, "git clone https://github.com/drunkide/pour \"");
             size_t size = (size_t)(pSlash - path);
             copybytes(dst, path, sizeof(TCHAR) * size);
             dst += size;
