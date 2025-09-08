@@ -419,7 +419,7 @@ macro(create_source_list _output _directory)
             )
         get_filename_component(_dir "${_file}" DIRECTORY)
         string(REPLACE "/" "\\" _dir "Source Files/${_dir}")
-        source_group("${_dir}" FILES "${_file}")
+        source_group("${_dir}" FILES "${_directory}/${_file}")
         list(APPEND ${_output} "${_directory}/${_file}")
     endforeach()
 
