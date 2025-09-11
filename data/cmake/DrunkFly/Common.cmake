@@ -346,9 +346,15 @@ function(enable_maximum_warnings)
         GCC_CLANG
             -pedantic
             -Wall
-            -Wconversion
             -Wshadow
         )
+
+    if(NOT EGCS)
+        extra_compile_options(${_prefix}
+            GCC_CLANG
+                -Wconversion
+            )
+    endif()
 
     if(MSVC AND NOT OLD_MSVC)
         extra_compile_options(${_prefix}
