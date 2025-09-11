@@ -342,7 +342,7 @@ function(enable_maximum_warnings)
             -w-   -wamb -wamp -wasm -waus -wbbf -wbei -wbig -wccc -wcln -wcpt -wdef -wdpu -wdsz -wdup
             -weas -weff -wext -whch -whid -wibc -will -winl -wlin -wlvc -wmpc -wmpd -wmsg -wnak -wncf
             -wnci -wnod -wnsf -wnst -wntd -wnvf -wobi -wobs -wofp -wovl -wpar -wpch -wpia -wpin -wpre
-            -wpro -wrch -wret -wrng -wrpt -wrvl -wsig -wstv -wsus -wucp -wuse -wvoi -wxxx -wzdi#-wstu
+            -wpro -wrch -wret -wrng -wrpt -wrvl -wsig -wsus -wucp -wuse -wvoi -wxxx -wzdi#-wstu#-wstv
         GCC_CLANG
             -pedantic
             -Wall
