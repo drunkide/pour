@@ -3,7 +3,7 @@
 if HOST_WINDOWS then
 
 CMAKE_VERSION = '3.31.4'
-CMAKE_GENERATOR = 'Ninja'
+CMAKE_GENERATOR = 'MinGW Makefiles'
 
 function prepare()
     pour.require('borland-4.5.2')

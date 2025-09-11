@@ -394,6 +394,7 @@ endfunction()
 # List of source files is written into <output> variable for later use.
 #
 #   create_source_list(output directory
+#       [GROUP name]
 #       [SOURCES] sources
 #       [HEADERS headers]
 #       [HTML5_SOURCES sources]
@@ -404,9 +405,13 @@ endfunction()
 #
 macro(create_source_list _output _directory)
     set(_options)
-    set(_single)
+    set(_single GROUP)
     set(_multi SOURCES HEADERS HTML5_SOURCES LINUX_SOURCES MSDOS_SOURCES MSWIN_SOURCES)
     cmake_parse_arguments(_opt "${_options}" "${_single}" "${_multi}" ${ARGN})
+
+    if(NOT _opt_GROUP)
+        set(_opt_GROUP "Source Files")
+    endif()
 
     foreach(_file
             ${_opt_UNPARSED_ARGUMENTS}
@@ -418,7 +423,7 @@ macro(create_source_list _output _directory)
             ${_opt_MSWIN_SOURCES}
             )
         get_filename_component(_dir "${_file}" DIRECTORY)
-        string(REPLACE "/" "\\" _dir "Source Files/${_dir}")
+        string(REPLACE "/" "\\" _dir "${_opt_GROUP}/${_dir}")
         source_group("${_dir}" FILES "${_directory}/${_file}")
         list(APPEND ${_output} "${_directory}/${_file}")
     endforeach()
