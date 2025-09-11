@@ -392,6 +392,9 @@ function(gcc_visibility_hidden)
     endif()
 endfunction()
 
+######################################################################################################################
+# Utility macros
+
 #
 # Creates source groups and configures compilation for platform-specific source files.
 # Input file list should be relative to <directory>.
@@ -454,3 +457,18 @@ macro(create_source_list _output _directory)
         _exclude_sources(_opt_MSWIN_SOURCES)
     endif()
 endmacro()
+
+#
+# Write file only if its contents have changed
+#
+function(smart_write_file _file _contents)
+    if(EXISTS "${_file}")
+        file(READ "${_file}" _old)
+        if("${_old}" STREQUAL "${_contents}")
+            message(STATUS "Up to date: ${_file}")
+            return()
+        endif()
+    endif()
+    message(STATUS "Writing: ${_file}")
+    file(WRITE "${_file}" "${_contents}")
+endfunction()
