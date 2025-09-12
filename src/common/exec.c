@@ -19,6 +19,9 @@ static bool g_ctrlC;
 static CRITICAL_SECTION g_criticalSection;
 static HANDLE g_hChildJob;
 static DWORD g_dwChildProcessId;
+static HANDLE g_hBackgroundJob;
+static HANDLE g_hBackgroundProcess;
+static DWORD g_dwBackgroundProcessId;
 #endif
 
 static bool g_initialized;
@@ -43,6 +46,7 @@ static BOOL WINAPI Exec_CtrlHandler(DWORD ctrl)
             }
             g_ctrlC = TRUE;
             Script_Interrupt();
+            Exec_TerminateBackgroundProcess();
             LeaveCriticalSection(&g_criticalSection);
             return FALSE;
         default:
@@ -64,10 +68,15 @@ void Exec_Init(lua_State* L)
     if (!g_hChildJob)
         luaL_error(L, "CreateJobObject failed (code 0x%p).", (void*)(size_t)GetLastError());
 
+    g_hBackgroundJob = CreateJobObject(NULL, NULL);
+    if (!g_hBackgroundJob)
+        luaL_error(L, "CreateJobObject failed (code 0x%p).", (void*)(size_t)GetLastError());
+
     JOBOBJECT_BASIC_LIMIT_INFORMATION jbli;
     ZeroMemory(&jbli, sizeof(jbli));
     jbli.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_CLOSE;
     SetInformationJobObject(g_hChildJob, JobObjectBasicLimitInformation, &jbli, sizeof(jbli));
+    SetInformationJobObject(g_hBackgroundJob, JobObjectBasicLimitInformation, &jbli, sizeof(jbli));
 
     SetConsoleCtrlHandler(Exec_CtrlHandler, TRUE);
 
@@ -160,6 +169,7 @@ bool Exec_CommandV(lua_State* L, const char* command, const char* const* argv, i
 
     switch (mode) {
         case RUN_WAIT:
+        case RUN_BACKGROUND:
             break;
         case RUN_DONT_WAIT:
             bInheritHandles = FALSE;
@@ -185,7 +195,20 @@ bool Exec_CommandV(lua_State* L, const char* command, const char* const* argv, i
     if (mode != RUN_WAIT) {
         lua_settop(L, start);
         CloseHandle(pi.hThread);
-        CloseHandle(pi.hProcess);
+        if (mode != RUN_BACKGROUND)
+            CloseHandle(pi.hProcess);
+        else {
+            EnterCriticalSection(&g_criticalSection);
+            if (g_hBackgroundProcess) {
+                Con_PrintF(L, COLOR_WARNING,
+                    "WARNING: background process was already running, terminating previous one.\n");
+                Exec_TerminateBackgroundProcess();
+            }
+            AssignProcessToJobObject(g_hBackgroundJob, pi.hProcess);
+            g_hBackgroundProcess = pi.hProcess;
+            g_dwBackgroundProcessId = pi.dwProcessId;
+            LeaveCriticalSection(&g_criticalSection);
+        }
         return true;
     }
 
@@ -224,4 +247,25 @@ bool Exec_CommandV(lua_State* L, const char* command, const char* const* argv, i
 
     lua_settop(L, start);
     return true;
+}
+
+void Exec_TerminateBackgroundProcess(void)
+{
+    EnterCriticalSection(&g_criticalSection);
+
+    if (!g_hBackgroundProcess)
+        return;
+
+    if (WaitForSingleObject(g_hBackgroundProcess, 0) != WAIT_OBJECT_0) {
+        TerminateJobObject(g_hBackgroundJob, (DWORD)-1);
+        if (WaitForSingleObject(g_hBackgroundProcess, 50) != WAIT_OBJECT_0) {
+            TerminateProcess(g_hBackgroundProcess, 0);
+            WaitForSingleObject(g_hBackgroundProcess, INFINITE);
+        }
+    }
+
+    g_hBackgroundProcess = NULL;
+    g_dwBackgroundProcessId = 0;
+
+    LeaveCriticalSection(&g_criticalSection);
 }

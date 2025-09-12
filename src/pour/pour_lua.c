@@ -52,6 +52,25 @@ static int pour_exec(lua_State* L)
     return 0;
 }
 
+static int pour_exec_background(lua_State* L)
+{
+    int argc = lua_gettop(L);
+    char** argv = (char**)lua_newuserdatauv(L, argc * sizeof(char**), 0);
+    for (int i = 0; i < argc; i++) {
+        size_t argLen;
+        const char* arg = luaL_checklstring(L, i + 1, &argLen);
+
+        ++argLen;
+        argv[i] = (char*)lua_newuserdatauv(L, argLen, 0);
+        memcpy(argv[i], arg, argLen);
+    }
+
+    if (!Exec_CommandV(L, argv[0], (const char* const*)argv, argc, NULL, RUN_BACKGROUND))
+        return luaL_error(L, "command execution failed.");
+
+    return 0;
+}
+
 static int pour_file_exists(lua_State* L)
 {
     const char* file = luaL_checkstring(L, 1);
@@ -140,19 +159,29 @@ static int pour_run(lua_State* L)
         memcpy(argv[i], arg, argLen);
     }
 
-    /*
-    runmode_t mode;
-    if (!strcmp(modestr, "wait"))
-        mode = RUN_WAIT;
-    else if (!strcmp(modestr, "nowait"))
-        mode = RUN_DONT_WAIT;
-    else if (!strcmp(modestr, "nowait,noconsole"))
-        mode = RUN_DONT_WAIT_NO_CONSOLE;
-    else
-        return luaL_error(L, "invalid value \"%s\" for the wait argument.", modestr);
-    */
-
     if (!Pour_Run(L, package, NULL, argc, argv, RUN_WAIT))
+        return luaL_error(L, "command execution failed.");
+
+    return 0;
+}
+
+static int pour_run_background(lua_State* L)
+{
+    int argc = lua_gettop(L);
+    const char* package = luaL_checkstring(L, 1);
+
+    char** argv = (char**)lua_newuserdatauv(L, argc * sizeof(char**), 0);
+    argv[0] = (char*)package;
+    for (int i = 1; i < argc; i++) {
+        size_t argLen;
+        const char* arg = luaL_checklstring(L, i + 1, &argLen);
+
+        ++argLen;
+        argv[i] = (char*)lua_newuserdatauv(L, argLen, 0);
+        memcpy(argv[i], arg, argLen);
+    }
+
+    if (!Pour_Run(L, package, NULL, argc, argv, RUN_BACKGROUND))
         return luaL_error(L, "command execution failed.");
 
     return 0;
@@ -182,12 +211,20 @@ static int pour_shell_open(lua_State* L)
     return 0;
 }
 
+static int pour_terminate_background_app(lua_State* L)
+{
+    DONT_WARN_UNUSED(L);
+    Exec_TerminateBackgroundProcess();
+    return 0;
+}
+
 /********************************************************************************************************************/
 
 static const luaL_Reg funcs[] = {
     { "build", pour_build },
     { "chdir", pour_chdir },
     { "exec", pour_exec },
+    { "exec_background", pour_exec_background },
     { "file_exists", pour_file_exists },
     { "file_read", pour_file_read },
     { "file_write", pour_file_write },
@@ -197,8 +234,10 @@ static const luaL_Reg funcs[] = {
     { "open_in_ide", pour_open_in_ide },
     { "require", pour_require },
     { "run", pour_run },
+    { "run_background", pour_run_background },
     { "invoke", pour_invoke },
     { "shell_open", pour_shell_open },
+    { "terminate_background_app", pour_terminate_background_app },
     { NULL, NULL }
 };
 

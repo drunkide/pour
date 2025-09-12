@@ -6,6 +6,7 @@
 #include <pour/build.h>
 #include <common/console.h>
 #include <common/env.h>
+#include <stdlib.h>
 #include <string.h>
 
 const char* g_pourExecutable;
@@ -41,6 +42,8 @@ bool Pour_Main(lua_State* L, int argc, char** argv)
     const char* chdir = NULL;
     buildmode_t buildmode;
     int n;
+
+    atexit(Exec_TerminateBackgroundProcess);
 
     Env_Set(L, "POUR_EXECUTABLE", argv[0]);
     g_pourExecutable = argv[0];

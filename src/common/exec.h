@@ -7,6 +7,7 @@ typedef enum runmode_t {
     RUN_WAIT = 0,
     RUN_DONT_WAIT,
     RUN_DONT_WAIT_NO_CONSOLE,
+    RUN_BACKGROUND,
 } runmode_t;
 
 extern bool g_dont_print_commands;
@@ -17,5 +18,7 @@ void Exec_Terminate(void);
 bool Exec_Command(lua_State* L, const char* const* argv, int argc, const char* chdir);
 bool Exec_CommandV(lua_State* L, const char* command, const char* const* argv, int argc,
     const char* chdir, runmode_t mode);
+
+void Exec_TerminateBackgroundProcess(void);
 
 #endif
