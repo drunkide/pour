@@ -80,6 +80,10 @@ if(GCC OR CLANG)
     endif()
 endif()
 
+if(EMSCRIPTEN)
+    set(CMAKE_EXECUTABLE_SUFFIX ".html")
+endif()
+
 ######################################################################################################################
 # Macros for compiler options
 
